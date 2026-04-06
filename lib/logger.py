@@ -69,6 +69,7 @@ class Log:
                     result.append(decoder.decode(key_code))
             # Not Letter Keys
             result.append(decoder.decode(key_code, mod.shift))
+        return "".join(result)
 
     def _flush(self):
         if not self.buffer:
