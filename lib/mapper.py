@@ -1,7 +1,4 @@
 # Keys that are identical in both normal and shift maps
-from readline import read_init_file
-
-
 common_map = {
     # Controls
     40: "ENTER",
