@@ -1,7 +1,3 @@
-# Microdot: https://github.com/miguelgrinberg/microdot
-# Version 2.5.2.dev0
-# Copyright (c) Miguel Grinberg
-# Licensed under the MIT License
 """
 microdot
 --------
@@ -15,7 +11,7 @@ import re
 import time
 
 try:
-    import orjson as json
+    import orjson as json  # type: ignore[import-not-found]
 except ImportError:
     import json
 
@@ -35,7 +31,7 @@ try:
                 None, partial(handler, *args, **kwargs))
         return ret
 except ImportError:  # pragma: no cover
-    def iscoroutine(coro):
+    def iscoroutine(coro):  # type: ignore[misc]
         return hasattr(coro, 'send') and hasattr(coro, 'throw')
 
     async def invoke_handler(handler, *args, **kwargs):
@@ -50,7 +46,7 @@ except ImportError:  # pragma: no cover
         return ret
 
 try:
-    from sys import print_exception
+    from sys import print_exception  # type: ignore[attr-defined]
 except ImportError:  # pragma: no cover
     import traceback
 
@@ -582,7 +578,7 @@ class Response:
     #: written to the client. Used to exit WebSocket connections cleanly.
     already_handled = None
 
-    def __init__(self, body='', status_code=200, headers=None, reason=None):
+    def __init__(self, body=b'', status_code=200, headers=None, reason=None):
         if body is None and status_code == 200:
             body = ''
             status_code = 204
@@ -1216,7 +1212,7 @@ class Microdot:
         raise HTTPException(status_code, reason)
 
     async def start_server(self, host='0.0.0.0', port=5000, debug=False,
-                           ssl=None):
+                           ssl=None, start_serving=True):
         """Start the Microdot web server as a coroutine. This coroutine does
         not normally return, as the server enters an endless listening loop.
         The :func:`shutdown` function provides a method for terminating the
@@ -1235,6 +1231,13 @@ class Microdot:
                       default is ``False``.
         :param ssl: An ``SSLContext`` instance or ``None`` if the server should
                     not use TLS. The default is ``None``.
+        :param start_serving: If ``True``, the server starts accepting
+                              connections immediately. When set to ``False``,
+                              this method returns a ``Server`` object. To
+                              accept connections, the
+                              ``Server.serve_forever()`` method should be
+                              called. The default is ``True``. A value of
+                              ``False`` is only supported in CPython.
 
         This method is a coroutine.
 
@@ -1279,10 +1282,18 @@ class Microdot:
                 host=host, port=port))
 
         try:
-            self.server = await asyncio.start_server(serve, host, port,
-                                                     ssl=ssl)
+            self.server = await asyncio.start_server(
+                serve, host, port, ssl=ssl, start_serving=start_serving)
+            if not start_serving:
+                return self.server
         except TypeError:  # pragma: no cover
-            self.server = await asyncio.start_server(serve, host, port)
+            if not start_serving:
+                raise ValueError('start_serving must be True')
+            try:
+                self.server = await asyncio.start_server(serve, host, port,
+                                                         ssl=ssl)
+            except TypeError:  # pragma: no cover
+                self.server = await asyncio.start_server(serve, host, port)
 
         while True:
             try:
@@ -1548,7 +1559,7 @@ class Microdot:
         return res
 
 
-Response.already_handled = Response()
+Response.already_handled = Response()  # type: ignore[assignment]
 
 abort = Microdot.abort
 redirect = Response.redirect
