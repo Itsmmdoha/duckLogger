@@ -1,5 +1,7 @@
 import os
 from microdot import Microdot, send_file, Response
+from microdot.websocket import WebSocketError, with_websocket
+from queue import Queue
 
 FILE_PATH = "log.txt"
 
@@ -45,13 +47,14 @@ homepage = """
 """
 
 class DuckLoggerAPI:
-    """
-    wraper for microdot, with two public queues:
+    """wraper for microdot, with two public queues:
      - keys:  for storing incoming keys from remote kbd
      - script: for storing incoming duckyscripts
     """
     def __init__(self) -> None:
         self.app = Microdot()
+        self.keys = Queue()
+        self.scripts = Queue()
         self.setup_routes()
 
     def setup_routes(self):
@@ -71,7 +74,32 @@ class DuckLoggerAPI:
                 content_type="text/plain",
             )
 
+        @self.app.route("/script", methods=["POST"])
+        async def script_upload(request):
+            """
+            Accepts a duckyscript via POST (raw text or form data)
+            and enqueues it for processing.
+            """
+            script_text = (await request.body()).decode("utf-8")
+
+            # TODO: wil put validation here later
+            if not script_text.strip():
+                return Response("Empty script", status_code=400)
+
+            self.scripts.enqueue(script_text)
+            return Response("Script received", status_code=200)
+
+        @self.app.route('/kbd')
+        @with_websocket
+        async def kbd(request, ws):
+            while True:
+                try:
+                    message = await ws.receive()
+                    self.keys.enqueue(message)
+                    await ws.send(message)
+                except WebSocketError:
+                    break
+
     def start_server(self):
         """returns awaitable coroutine"""
         return self.app.start_server(host="0.0.0.0", port=80)
-

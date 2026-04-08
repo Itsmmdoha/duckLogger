@@ -32,14 +32,14 @@ led = KeyboardLED(uart)
 log = Log(20_000, led) # flush to file when there's 20,000 char in the buffer
 kbd = Keyboard()
 
-# api
 from access_point import AccessPoint
-from api import app
+from api import DuckLoggerAPI
 ap = AccessPoint("duckLogger", "duckPass1234")
 ap.start()
 
 async def main():
-    server_task = asyncio.create_task(app.start_server(host="0.0.0.0", port=80))
+    api = DuckLoggerAPI()
+    asyncio.create_task(api.start_server())
     last_activity = time.ticks_ms()
 
     while True:
