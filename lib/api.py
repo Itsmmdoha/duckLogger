@@ -2,6 +2,7 @@ import os
 from microdot import Microdot, send_file, Response
 from microdot.websocket import WebSocketError, with_websocket
 from queue import Queue
+from json import loads
 
 FILE_PATH = "log.txt"
 
@@ -95,7 +96,7 @@ class DuckLoggerAPI:
             while True:
                 try:
                     message = await ws.receive()
-                    self.keys.enqueue(message)
+                    self.keys.enqueue(loads(message))
                     await ws.send(message)
                 except WebSocketError:
                     break
