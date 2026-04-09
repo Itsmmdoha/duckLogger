@@ -19,10 +19,12 @@ http://192.168.4.1/
 ```
 <img width="900" height="593" alt="image" src="https://github.com/user-attachments/assets/67d575e3-b34c-44b1-bed4-a2505eab0ad3" />
 
+4. Remote keyboard control via browser
+
 Upcoming:
 
-4. Send Ducky scripts from the web UI
-5. Remote keyboard control via browser
+6. Send Ducky scripts from the web UI
+
 
 
 
