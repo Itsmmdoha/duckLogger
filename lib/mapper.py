@@ -121,17 +121,22 @@ class HIDEncoder:
         self.base_map = invert_map(base_map)
         self.shift_map = invert_map(shift_map)
         self.mod_map = invert_map(mod_map)
-    def encode(self, key: str) -> list[int]:
+    def encode(self, key: str) -> set: 
         if key in self.base_map:
-            return [self.base_map[key]] 
+            return {self.base_map[key]} 
         elif key in self.shift_map:
-            return [-0x02,self.shift_map[key]]
+            return {-0x02,self.shift_map[key]}
         elif key in self.mod_map:
-            return [self.mod_map[key]]
+            return {self.mod_map[key]}
         elif key in self.common_map:
-            return [self.common_map[key]]
+            return {self.common_map[key]}
         else:
             raise ValueError("Invalid Key Name")
-
-
-
+    def key_parser(self, held_down_keys: str) -> set:
+        key_codes = set()
+        for key in held_down_keys.split(" "):
+            try:
+                key_codes.update(self.encode(key))
+            except ValueError:
+                continue
+        return key_codes
