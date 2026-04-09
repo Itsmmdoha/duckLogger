@@ -103,6 +103,12 @@ Make sure your board is connected via USB.
 mpremote cp -r lib/* :/lib/
 ```
 
+### Copy web c2 files to the root of the device
+
+```bash
+mpremote cp index.html :
+```
+
 ### Copy main files to the root of the device
 
 ```bash
