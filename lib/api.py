@@ -14,38 +14,6 @@ def file_exists():
         return False
 
 
-homepage = """
-<!DOCTYPE html>
-<html>
-<head>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <style>
-    body {
-      margin: 0;
-      display: flex;
-      justify-content: center; /* Horizontal centering */
-      align-items: center;     /* Vertical centering */
-      min-height: 100vh;       /* Full screen height */
-      font-family: sans-serif;
-    }
-
-    button {
-      padding: 12px 24px;      /* Better "tap target" for fingers */
-      font-size: 16px;         /* Prevents iOS zoom-on-focus */
-      width: auto;
-      max-width: 90%;          /* Ensures it doesn't hit screen edges */
-      cursor: pointer;
-    }
-  </style>
-</head>
-<body>
-  <a href="/log">
-    <button>Download Log</button>
-  </a>
-</body>
-</html>
-"""
-
 class DuckLoggerAPI:
     """wraper for microdot, with two public queues:
      - keys:  for storing incoming keys from remote kbd
@@ -60,8 +28,11 @@ class DuckLoggerAPI:
     def setup_routes(self):
         @self.app.route("/")
         async def index(request):
-            # send HTML with proper content type
-            return Response(body=homepage, headers={'Content-Type': 'text/html'})
+            # sends index.html
+            return send_file(
+                "index.html",
+                content_type="text/html",
+            )
 
         @self.app.route("/log")
         async def download_log(request):
@@ -103,3 +74,4 @@ class DuckLoggerAPI:
     def start_server(self):
         """returns awaitable coroutine"""
         return self.app.start_server(host="0.0.0.0", port=80)
+
