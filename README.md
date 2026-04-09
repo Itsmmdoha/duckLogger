@@ -17,6 +17,7 @@ Recreating this project doesn't require any custom PCB. Hardware used here is le
 ```
 http://192.168.4.1/
 ```
+<img width="900" height="593" alt="image" src="https://github.com/user-attachments/assets/67d575e3-b34c-44b1-bed4-a2505eab0ad3" />
 
 Upcoming:
 
