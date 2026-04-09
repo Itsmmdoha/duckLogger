@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ESP32 Injector</title>
+    <style>
+        :root {
+            --bg: #0b0f14;
+            --btn-bg: #101720;
+            --border: #1f2a36;
+            --text: #e8eef6;
+            --green: #20c56b;
+            --red: #ff5a6a;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        /* Main Input Area */
+        .container {
+            width: 90%;
+            max-width: 600px;
+            margin-top: 10vh;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        textarea {
+            width: 100%;
+            height: 300px;
+            background: transparent;
+            border: 2px solid var(--green);
+            border-radius: 8px;
+            color: var(--text);
+            padding: 10px;
+        }
+
+        /* Bottom Button Group */
+        .btn-group {
+            position: fixed;
+            bottom: 30px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .action-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--btn-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 14px;
+            outline: none;
+        }
+        .action-btn svg {
+            width: 18px;
+            height: 18px;
+            fill: none;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+        .btn-green { color: var(--green); }
+        .btn-green svg { stroke: var(--green); }
+        .btn-red { color: var(--red); }
+        .btn-red svg { stroke: var(--red); }
+
+        /* Keyboard Popup */
+        #kbd-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(11, 15, 20, 0.95);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start; /* Moved to top */
+            padding-top: 50px; /* Added proper spacing */
+            z-index: 100;
+        }
+        .kbd-container {
+            width: 90%;
+            max-width: 400px;
+            background: var(--btn-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .kbd-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: var(--green);
+            font-weight: bold;
+        }
+        .close-btn {
+            background: transparent;
+            border: none;
+            color: var(--text);
+            font-size: 20px;
+            cursor: pointer;
+        }
+        .mod-row { display: flex; gap: 8px; justify-content: space-between; }
+        .mod-btn {
+            flex: 1;
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 10px 0;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.1s, color 0.1s;
+        }
+        .mod-btn.active {
+            background: var(--green);
+            color: var(--bg);
+            border-color: var(--green);
+        }
+        .kbd-input {
+            width: 100%;
+            background: transparent;
+            border: 1px solid var(--green);
+            color: var(--text);
+            padding: 12px;
+            border-radius: 6px;
+            text-align: center;
+            outline: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <textarea id="ducky-script" placeholder="DuckyScript..."></textarea>
+        <button class="action-btn btn-green" style="align-self: flex-end;" onclick="injectScript()">Inject</button>
+    </div>
+
+    <div class="btn-group">
+        <button class="action-btn btn-green" onclick="console.log('Settings')">
+            <svg viewBox="0 0 24 24">
+                <path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z M12 2.5v2.2 M12 19.3v2.2 M2.5 12h2.2 M19.3 12h2.2 m5.2 5.2 1.6 1.6 m17.2 17.2 1.6 1.6 m18.8 5.2-1.6 1.6 m6.8 17.2-1.6 1.6"/>
+            </svg>
+            Settings
+        </button>
+        <button class="action-btn btn-green" onclick="window.location.href='/log'">
+            <svg viewBox="0 0 24 24">
+                <path d="M12 3v10 M8 11l4 4 4-4 M4 17v2h16v-2"/>
+            </svg>
+            Download
+        </button>
+        <button class="action-btn btn-green" onclick="openKbd()">
+            <svg viewBox="0 0 24 24">
+                <path d="M3 6h18v12H3z M6 10h1 M9 10h1 M12 10h1 M15 10h1 M18 10h1 M6 13h8 M15 13h3"/>
+            </svg>
+            Keyboard
+        </button>
+        <button class="action-btn btn-red" onclick="deleteLog()">
+            <svg viewBox="0 0 24 24">
+                <path d="M3 6h18 M8 6V4h8v2 M6 6l1 14h10l1-14 M10 10v6 M14 10v6"/>
+            </svg>
+            Delete
+        </button>
+    </div>
+
+    <div id="kbd-overlay">
+        <div class="kbd-container">
+            <div class="kbd-header">
+                <span>Live Keyboard</span>
+                <button class="close-btn" onclick="closeKbd()">✕</button>
+            </div>
+            <div class="mod-row">
+                <button class="mod-btn" onclick="toggleMod(this, 'CTRL')">CTRL</button>
+                <button class="mod-btn" onclick="toggleMod(this, 'ALT')">ALT</button>
+                <button class="mod-btn" onclick="toggleMod(this, 'SHIFT')">SHIFT</button>
+                <button class="mod-btn" onclick="toggleMod(this, 'WIN')">WIN</button>
+            </div>
+            
+            <input type="text" id="live-input" class="kbd-input" placeholder="Tap to trigger keyboard..." autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">
+            
+            <div class="mod-row">
+                <!-- Pass 'this' so the JS knows which button to animate -->
+                <button class="mod-btn" onclick="sendQuickKey(this, 'ESC')">ESC</button>
+                <button class="mod-btn" onclick="sendQuickKey(this, 'TAB')">TAB</button>
+                <button class="mod-btn" onclick="sendQuickKey(this, 'WIN')">WIN</button>
+                <button class="mod-btn" onclick="sendQuickKey(this, 'BKSP')">BKSP</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Rest API Calls
+        function injectScript() {
+            const data = document.getElementById('ducky-script').value;
+            fetch('/script', { method: 'POST', body: data });
+        }
+
+        function deleteLog() {
+            fetch('/log', { method: 'DELETE' });
+        }
+
+        // WebSocket & Keyboard Logic
+        let ws = null;
+        const activeMods = new Set();
+        const overlay = document.getElementById('kbd-overlay');
+        const liveInput = document.getElementById('live-input');
+
+        const keyMap = {
+            'Enter': 'ENTER', 'Escape': 'ESC', 'Backspace': 'BKSP',
+            'Tab': 'TAB', 'CapsLock': 'CAPS', 'Delete': 'DEL', 'Insert': 'INS',
+            'Home': 'HOME', 'End': 'END', 'PageUp': 'PGUP', 'PageDown': 'PGDN',
+            'ArrowRight': 'RIGHT', 'ArrowLeft': 'LEFT', 'ArrowDown': 'DOWN', 'ArrowUp': 'UP'
+        };
+
+        function openKbd() {
+            overlay.style.display = 'flex';
+            ws = new WebSocket('ws://' + window.location.host + '/kbd');
+            liveInput.focus();
+        }
+
+        function closeKbd() {
+            overlay.style.display = 'none';
+            if(ws) ws.close();
+        }
+
+        function toggleMod(btn, mod) {
+            if (activeMods.has(mod)) {
+                activeMods.delete(mod);
+                btn.classList.remove('active');
+            } else {
+                activeMods.add(mod);
+                btn.classList.add('active');
+            }
+            liveInput.focus();
+        }
+
+        // Instantly sends a key, flashes the button green, and keeps focus on the input field
+        function sendQuickKey(btn, key) {
+            // Add visual active state
+            btn.classList.add('active');
+            // Remove it after 150ms to create a "blink" effect
+            setTimeout(() => {
+                btn.classList.remove('active');
+            }, 150);
+
+            sendPayload(key, null);
+            liveInput.focus();
+        }
+
+        // Centralized function to package and send keystrokes to the ESP32
+        function sendPayload(key, evt) {
+            let mods = [];
+            // Catch both physical keyboard modifiers and on-screen toggle buttons
+            if ((evt && evt.ctrlKey) || activeMods.has('CTRL')) mods.push('CTRL');
+            if ((evt && evt.altKey) || activeMods.has('ALT')) mods.push('ALT');
+            if ((evt && evt.shiftKey) || activeMods.has('SHIFT')) mods.push('SHIFT');
+            if ((evt && evt.metaKey) || activeMods.has('WIN')) mods.push('WIN');
+
+            let msg = mods.length > 0 ? mods.join(' ') + ' ' + key : key;
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(msg);
+            }
+        }
+
+        // 1. Handle special keys (Backspace, Enter, Arrows) which don't trigger the input event data
+        liveInput.addEventListener('keydown', (e) => {
+            // Ignore pressing physical modifier keys on their own
+            if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) return;
+
+            // If the key is a special mapped key (length > 1 means it's not a standard letter like 'a')
+            if (e.key.length > 1 && e.key !== 'Unidentified') {
+                e.preventDefault(); // Stop it from moving cursors or blurring
+                let key = keyMap[e.key] || e.key;
+                sendPayload(key, e);
+            }
+            // If it's a standard letter (length 1), we let it pass through to the 'input' event below
+            // This bypasses the mobile 'Unidentified' 229 keycode bug.
+        });
+
+        // 2. Handle normal typing (Letters, numbers, spaces). 
+        // This is guaranteed to fire with the correct character on mobile.
+        liveInput.addEventListener('input', (e) => {
+            if (e.data) {
+                // If the user typed a space, it comes through here. Send it as ' ' or 'SPACE' based on your ESP32 code.
+                sendPayload(e.data === ' ' ? 'SPACE' : e.data, null); 
+            }
+            // Immediately clear the input field so it stays empty
+            liveInput.value = '';
+        });
+    </script>
+</body>
+</html>

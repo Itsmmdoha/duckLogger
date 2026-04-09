@@ -100,7 +100,7 @@ Make sure your board is connected via USB.
 ### Copy all library files to `/lib` on the device
 
 ```bash
-mpremote cp lib/*.py :/lib/
+mpremote cp -r lib/* :/lib/
 ```
 
 ### Copy main files to the root of the device
