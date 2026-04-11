@@ -34,16 +34,23 @@ class DuckLoggerAPI:
                 content_type="text/html",
             )
 
-        @self.app.route("/log")
+        @self.app.route("/log", methods=["GET"])
         async def download_log(request):
             if not file_exists():
                 return "<h3>404 Not Found</h3>", 404
-            
             # send file as download
             return send_file(
                 FILE_PATH,
                 content_type="text/plain",
             )
+
+        @self.app.route("/log", methods=["DELETE"])
+        async def delete_log(request):
+            try:
+                os.remove(FILE_PATH)
+                return "deleted", 200
+            except OSError:
+                return "file not found", 404
 
         @self.app.route("/script", methods=["POST"])
         async def script_upload(request):
