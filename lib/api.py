@@ -2,6 +2,7 @@ import os
 from microdot import Microdot, send_file, Response
 from microdot.websocket import WebSocketError, with_websocket
 from queue import Queue
+from json import dump as json_dump
 
 FILE_PATH = "log.txt"
 
@@ -77,6 +78,30 @@ class DuckLoggerAPI:
                     await ws.send(message)
                 except WebSocketError:
                     break
+
+        @self.app.route("/settings", methods=["GET"])
+        async def get_settings(request):
+            try:
+                return send_file(
+                    "settings.json",
+                    content_type="application/json",
+                )
+            except:
+                return "file not found", 404
+        @self.app.route("/settings", methods=["POST"])
+        async def update_settings(request):
+            try:
+                settings = request.json
+                with open("settings.json", "w") as f:
+                    settings_data = {
+                        "mode" : settings["mode"],
+                        "ssid" : settings["ssid"],
+                        "password" : settings["password"]
+                    }
+                    json_dump(settings_data, f)
+                return "Success", 200
+            except:
+                return "Invalid Settings", 400
 
     def start_server(self):
         """returns awaitable coroutine"""
