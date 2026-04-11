@@ -32,13 +32,12 @@ led = KeyboardLED(uart)
 log = Log(20_000, led) # flush to file when there's 20,000 char in the buffer
 kbd = Keyboard()
 
-from access_point import AccessPoint
 from api import DuckLoggerAPI
 from mapper import HIDEncoder, mod_map
+import wifi_radio
+wifi_radio.start()
 
 encoder = HIDEncoder()
-ap = AccessPoint("duckLogger", "duckPass1234")
-ap.start()
 
 async def main():
     api = DuckLoggerAPI()

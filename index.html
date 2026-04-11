@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ESP32 Injector</title>
+    <title>DuckLogger</title>
     <style>
         :root {
             --bg: #0b0f14;
@@ -67,29 +67,23 @@
         .action-btn svg {
             width: 18px;
             height: 18px;
-            fill: none;
-            stroke-width: 2;
-            stroke-linecap: round;
-            stroke-linejoin: round;
         }
         .btn-green { color: var(--green); }
         .btn-green svg { stroke: var(--green); }
-        .btn-red { color: var(--red); }
-        .btn-red svg { stroke: var(--red); }
 
-        /* Keyboard Popup */
-        #kbd-overlay {
+        /* Shared Popups (Keyboard & System) */
+        .overlay {
             position: fixed;
             top: 0; left: 0; width: 100vw; height: 100vh;
             background: rgba(11, 15, 20, 0.95);
             display: none;
             flex-direction: column;
             align-items: center;
-            justify-content: flex-start; /* Moved to top */
-            padding-top: 50px; /* Added proper spacing */
+            justify-content: flex-start;
+            padding-top: 50px;
             z-index: 100;
         }
-        .kbd-container {
+        .modal {
             width: 90%;
             max-width: 400px;
             background: var(--btn-bg);
@@ -100,7 +94,7 @@
             flex-direction: column;
             gap: 15px;
         }
-        .kbd-header {
+        .modal-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -130,7 +124,7 @@
             color: var(--bg);
             border-color: var(--green);
         }
-        .kbd-input {
+        .modal-input {
             width: 100%;
             background: transparent;
             border: 1px solid var(--green);
@@ -140,82 +134,169 @@
             text-align: center;
             outline: none;
         }
+        .modal-input option { background: var(--bg); color: var(--text); }
+
+        /* Toast Notification */
+        #toast {
+            position: fixed;
+            top: 20px;
+            background: var(--green);
+            color: var(--bg);
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-weight: bold;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+            z-index: 1000;
+        }
+        #toast.show { opacity: 1; }
     </style>
 </head>
 <body>
 
+    <!-- Notification Toast -->
+    <div id="toast">Success!</div>
+
     <div class="container">
         <textarea id="ducky-script" placeholder="DuckyScript..."></textarea>
-        <button class="action-btn btn-green" style="align-self: flex-end;" onclick="injectScript()">Inject</button>
+        <button class="action-btn btn-green" style="align-self: flex-end;" onclick="injectScript()" title="Inject DuckyScript payload">Inject</button>
     </div>
 
     <div class="btn-group">
-        <button class="action-btn btn-green" onclick="console.log('Settings')">
-            <svg viewBox="0 0 24 24">
-                <path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z M12 2.5v2.2 M12 19.3v2.2 M2.5 12h2.2 M19.3 12h2.2 m5.2 5.2 1.6 1.6 m17.2 17.2 1.6 1.6 m18.8 5.2-1.6 1.6 m6.8 17.2-1.6 1.6"/>
+        <button class="action-btn btn-green" onclick="openSys()" title="Open System Settings">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 7a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V7Z M8 9a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V9Z M8 2v2 M12 2v2 M16 2v2 M8 20v2 M12 20v2 M16 20v2 M2 8h2 M2 12h2 M2 16h2 M20 8h2 M20 12h2 M20 16h2"/>
             </svg>
-            Settings
+            System
         </button>
-        <button class="action-btn btn-green" onclick="window.location.href='/log'">
-            <svg viewBox="0 0 24 24">
+        <button class="action-btn btn-green" onclick="window.location.href='/log'" title="Download Keystroke Logs">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M12 3v10 M8 11l4 4 4-4 M4 17v2h16v-2"/>
             </svg>
             Download
         </button>
-        <button class="action-btn btn-green" onclick="openKbd()">
-            <svg viewBox="0 0 24 24">
+        <button class="action-btn btn-green" onclick="openKbd()" title="Open Live Remote Keyboard">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M3 6h18v12H3z M6 10h1 M9 10h1 M12 10h1 M15 10h1 M18 10h1 M6 13h8 M15 13h3"/>
             </svg>
             Keyboard
         </button>
-        <button class="action-btn btn-red" onclick="deleteLog()">
-            <svg viewBox="0 0 24 24">
-                <path d="M3 6h18 M8 6V4h8v2 M6 6l1 14h10l1-14 M10 10v6 M14 10v6"/>
-            </svg>
-            Delete
-        </button>
     </div>
 
-    <div id="kbd-overlay">
-        <div class="kbd-container">
-            <div class="kbd-header">
+    <!-- System Popup -->
+    <div id="sys-overlay" class="overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <span>System</span>
+                <button class="close-btn" onclick="closeSys()" title="Close System Settings">✕</button>
+            </div>
+            
+            <select id="sys-mode" class="modal-input" title="Network Mode">
+                <option value="ap">Create Hotspot (AP)</option>
+                <option value="wifi">Connect to WiFi</option>
+            </select>
+            <input type="text" id="sys-ssid" class="modal-input" placeholder="SSID" autocomplete="off" spellcheck="false" title="Network SSID">
+            <input type="text" id="sys-pass" class="modal-input" placeholder="Password (optional)" autocomplete="off" spellcheck="false" title="Network Password">
+            
+            <div class="mod-row">
+                <button class="mod-btn" onclick="saveSys(this)" title="Save Settings">Save</button>
+                <button class="mod-btn" style="color: var(--red); border-color: var(--red);" onclick="deleteLog()" title="Delete Log File">Delete Logs</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Keyboard Popup -->
+    <div id="kbd-overlay" class="overlay">
+        <div class="modal">
+            <div class="modal-header">
                 <span>Live Keyboard</span>
-                <button class="close-btn" onclick="closeKbd()">✕</button>
+                <button class="close-btn" onclick="closeKbd()" title="Close Keyboard">✕</button>
             </div>
             <div class="mod-row">
-                <button class="mod-btn" onclick="toggleMod(this, 'CTRL')">CTRL</button>
-                <button class="mod-btn" onclick="toggleMod(this, 'ALT')">ALT</button>
-                <button class="mod-btn" onclick="toggleMod(this, 'SHIFT')">SHIFT</button>
-                <button class="mod-btn" onclick="toggleMod(this, 'WIN')">WIN</button>
+                <button class="mod-btn" onclick="toggleMod(this, 'CTRL')" title="Hold CTRL">CTRL</button>
+                <button class="mod-btn" onclick="toggleMod(this, 'ALT')" title="Hold ALT">ALT</button>
+                <button class="mod-btn" onclick="toggleMod(this, 'SHIFT')" title="Hold SHIFT">SHIFT</button>
+                <button class="mod-btn" onclick="toggleMod(this, 'WIN')" title="Hold WIN">WIN</button>
             </div>
             
-            <input type="text" id="live-input" class="kbd-input" placeholder="Tap to trigger keyboard..." autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">
+            <input type="text" id="live-input" class="modal-input" placeholder="Tap to trigger keyboard..." autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" title="Type here to send keystrokes">
             
             <div class="mod-row">
-                <!-- Pass 'this' so the JS knows which button to animate -->
-                <button class="mod-btn" onclick="sendQuickKey(this, 'ESC')">ESC</button>
-                <button class="mod-btn" onclick="sendQuickKey(this, 'TAB')">TAB</button>
-                <button class="mod-btn" onclick="sendQuickKey(this, 'WIN')">WIN</button>
-                <button class="mod-btn" onclick="sendQuickKey(this, 'CAPS')">CAPS</button>
+                <button class="mod-btn" onclick="sendQuickKey(this, 'ESC')" title="Send ESC">ESC</button>
+                <button class="mod-btn" onclick="sendQuickKey(this, 'TAB')" title="Send TAB">TAB</button>
+                <button class="mod-btn" onclick="sendQuickKey(this, 'WIN')" title="Send WIN">WIN</button>
+                <button class="mod-btn" onclick="sendQuickKey(this, 'CAPS')" title="Send CAPS LOCK">CAPS</button>
             </div>
         </div>
     </div>
 
     <script>
-        // Rest API Calls
-        function injectScript() {
-            const data = document.getElementById('ducky-script').value;
-            fetch('/script', { method: 'POST', body: data });
+        // Feedback Toast Logic
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 2000);
+        }
+
+        // System API Calls
+        function openSys() {
+            document.getElementById('sys-overlay').style.display = 'flex';
+            fetch('/settings')
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('sys-mode').value = data.mode || 'ap';
+                    document.getElementById('sys-ssid').value = data.ssid || '';
+                    document.getElementById('sys-pass').value = data.password || '';
+                }).catch(err => console.error("Failed to load settings", err));
+        }
+
+        function closeSys() {
+            document.getElementById('sys-overlay').style.display = 'none';
+        }
+
+        function saveSys(btn) {
+            const payload = {
+                mode: document.getElementById('sys-mode').value,
+                ssid: document.getElementById('sys-ssid').value,
+                password: document.getElementById('sys-pass').value
+            };
+
+            fetch('/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            }).then(res => {
+                btn.classList.add('active');
+                setTimeout(() => btn.classList.remove('active'), 150);
+                if(res.ok) showToast("Settings Saved!");
+                else showToast("Failed to save");
+            }).catch(() => showToast("Error saving settings"));
         }
 
         function deleteLog() {
-            fetch('/log', { method: 'DELETE' });
+            if(confirm("Are you sure you want to permanently delete the log file?")) {
+                fetch('/log', { method: 'DELETE' }).then(res => {
+                    if(res.ok) showToast("Logs Deleted!");
+                    else showToast("Failed to delete logs");
+                }).catch(() => showToast("Error deleting logs"));
+            }
+        }
+
+        // Action API Calls
+        function injectScript() {
+            const data = document.getElementById('ducky-script').value;
+            fetch('/script', { method: 'POST', body: data }).then(res => {
+                if(res.ok) showToast("Script Injected!");
+                else showToast("Injection Failed");
+            }).catch(() => showToast("Error during injection"));
         }
 
         // WebSocket & Keyboard Logic
         let ws = null;
         const activeMods = new Set();
-        const overlay = document.getElementById('kbd-overlay');
+        const kbdOverlay = document.getElementById('kbd-overlay');
         const liveInput = document.getElementById('live-input');
 
         const keyMap = {
@@ -226,13 +307,13 @@
         };
 
         function openKbd() {
-            overlay.style.display = 'flex';
+            kbdOverlay.style.display = 'flex';
             ws = new WebSocket('ws://' + window.location.host + '/kbd');
             liveInput.focus();
         }
 
         function closeKbd() {
-            overlay.style.display = 'none';
+            kbdOverlay.style.display = 'none';
             if(ws) ws.close();
         }
 
@@ -247,23 +328,15 @@
             liveInput.focus();
         }
 
-        // Instantly sends a key, flashes the button green, and keeps focus on the input field
         function sendQuickKey(btn, key) {
-            // Add visual active state
             btn.classList.add('active');
-            // Remove it after 150ms to create a "blink" effect
-            setTimeout(() => {
-                btn.classList.remove('active');
-            }, 150);
-
+            setTimeout(() => btn.classList.remove('active'), 150);
             sendPayload(key, null);
             liveInput.focus();
         }
 
-        // Centralized function to package and send keystrokes to the ESP32
         function sendPayload(key, evt) {
             let mods = [];
-            // Catch both physical keyboard modifiers and on-screen toggle buttons
             if ((evt && evt.ctrlKey) || activeMods.has('CTRL')) mods.push('CTRL');
             if ((evt && evt.altKey) || activeMods.has('ALT')) mods.push('ALT');
             if ((evt && evt.shiftKey) || activeMods.has('SHIFT')) mods.push('SHIFT');
@@ -275,29 +348,17 @@
             }
         }
 
-        // 1. Handle special keys (Backspace, Enter, Arrows) which don't trigger the input event data
         liveInput.addEventListener('keydown', (e) => {
-            // Ignore pressing physical modifier keys on their own
             if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) return;
-
-            // If the key is a special mapped key (length > 1 means it's not a standard letter like 'a')
             if (e.key.length > 1 && e.key !== 'Unidentified') {
-                e.preventDefault(); // Stop it from moving cursors or blurring
+                e.preventDefault();
                 let key = keyMap[e.key] || e.key;
                 sendPayload(key, e);
             }
-            // If it's a standard letter (length 1), we let it pass through to the 'input' event below
-            // This bypasses the mobile 'Unidentified' 229 keycode bug.
         });
 
-        // 2. Handle normal typing (Letters, numbers, spaces). 
-        // This is guaranteed to fire with the correct character on mobile.
         liveInput.addEventListener('input', (e) => {
-            if (e.data) {
-                // If the user typed a space, it comes through here. Send it as ' ' or 'SPACE' based on your ESP32 code.
-                sendPayload(e.data === ' ' ? 'SPACE' : e.data, null); 
-            }
-            // Immediately clear the input field so it stays empty
+            if (e.data) sendPayload(e.data === ' ' ? 'SPACE' : e.data, null); 
             liveInput.value = '';
         });
     </script>

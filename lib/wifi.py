@@ -2,7 +2,7 @@ import network
 import time
 
 
-class WiFiNetwork:
+class WifiNetwork:
     def __init__(self, ssid: str, password: str = ""):
         self.ssid = ssid
         self.password = password
