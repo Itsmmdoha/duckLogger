@@ -58,73 +58,33 @@ Set `S0` to the GND position (0) and keep all other switches in the opposite pos
 
 ## 2. Flash MicroPython
 
-DuckLogger is written in micropython, flash your board with micropython.
-Find flashing instructions [here](https://micropython.org/download/ESP32_GENERIC_S3/)
-
+DuckLogger is written in MicroPython. Flash your board with MicroPython firmware.
+Find flashing instructions [here](https://micropython.org/download/ESP32_GENERIC_S3/).
 
 After flashing, disconnect and reconnect the board via USB.
 
-
-## 3. Install mpremote
-
-On your development machine:
-
-```bash
-pip install mpremote
-```
-
-Verify that your board is detected:
-
-```bash
-mpremote connect list
-```
-
-## 4. Install Required MicroPython Packages
-
-Install required packages directly onto the board:
-
-```bash
-mpremote mip install usb-device
-mpremote mip install usb-device-keyboard
-```
-
-
-## 5. Install DuckLogger on the Board
-
-Clone the repository:
+## 3. Clone the Repository
 
 ```bash
 git clone https://github.com/Itsmmdoha/duckLogger.git
 cd duckLogger
 ```
 
-Make sure your board is connected via USB.
+## 4. Install DuckLogger on the Board
 
-### Copy all library files to `/lib` on the device
-
-```bash
-mpremote cp -r lib/* :/lib/
-```
-
-### Copy web c2 files to the root of the device
+Make sure your board is connected via USB, then run:
 
 ```bash
-mpremote cp index.html :
-mpremote cp settings.json :
+python flasher.py
 ```
 
-### Copy main files to the root of the device
+The flasher will automatically:
 
-```bash
-mpremote cp main.py :
-```
+* Install `mpremote` and required MicroPython packages on the board
+* Compress `index.html` and copy all files to the board
+* Reboot the board
 
-Reboot the board:
-
-```bash
-mpremote reset
-```
-
+---
 
 # Usage
 
@@ -142,30 +102,31 @@ Connect to the Wi-Fi Access Point (Password: `duckPass1234`) and open:
 http://192.168.4.1/
 ```
 
-to download the log file.
+To access the command and control center.
 
 
 # Repository Structure
 
 ```
 .
+├── flasher.py
 ├── index.html
 ├── lib
-│   ├── access_point.py
-│   ├── api.py
-│   ├── keyboard.py
-│   ├── key_led.py
-│   ├── logger.py
-│   ├── mapper.py
-│   ├── microdot
-│   │   ├── helpers.py
-│   │   ├── microdot.py
-│   │   └── websocket.py
-│   ├── queue.py
-│   ├── settings.py
-│   ├── uart_buffer.py
-│   ├── wifi.py
-│   └── wifi_radio.py
+│   ├── access_point.py
+│   ├── api.py
+│   ├── keyboard.py
+│   ├── key_led.py
+│   ├── logger.py
+│   ├── mapper.py
+│   ├── microdot
+│   │   ├── helpers.py
+│   │   ├── microdot.py
+│   │   └── websocket.py
+│   ├── queue.py
+│   ├── settings.py
+│   ├── uart_buffer.py
+│   ├── wifi.py
+│   └── wifi_radio.py
 ├── LICENSE
 ├── main.py
 ├── README.md
