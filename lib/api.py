@@ -31,8 +31,9 @@ class DuckLoggerAPI:
         async def index(request):
             # sends index.html
             return send_file(
-                "index.html",
+                "index.html.gz",
                 content_type="text/html",
+                compressed=True
             )
 
         @self.app.route("/log", methods=["GET"])
