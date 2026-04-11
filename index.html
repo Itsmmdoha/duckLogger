@@ -136,6 +136,15 @@
         }
         .modal-input option { background: var(--bg); color: var(--text); }
 
+        /* Connection Dot */
+        .dot {
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            background: var(--red);
+            margin-left: 8px;
+            transition: background 0.3s;
+        }
+
         /* Toast Notification */
         #toast {
             position: fixed;
@@ -210,7 +219,7 @@
     <div id="kbd-overlay" class="overlay">
         <div class="modal">
             <div class="modal-header">
-                <span>Live Keyboard</span>
+                <span style="display: flex; align-items: center;">Live Keyboard <div id="ws-dot" class="dot" title="Disconnected"></div></span>
                 <button class="close-btn" onclick="closeKbd()" title="Close Keyboard">✕</button>
             </div>
             <div class="mod-row">
@@ -298,6 +307,7 @@
         const activeMods = new Set();
         const kbdOverlay = document.getElementById('kbd-overlay');
         const liveInput = document.getElementById('live-input');
+        const wsDot = document.getElementById('ws-dot');
 
         const keyMap = {
             'Enter': 'ENTER', 'Escape': 'ESC', 'Backspace': 'BKSP',
@@ -308,7 +318,21 @@
 
         function openKbd() {
             kbdOverlay.style.display = 'flex';
+            wsDot.style.background = 'var(--red)';
+            wsDot.title = 'Connecting...';
+            
             ws = new WebSocket('ws://' + window.location.host + '/kbd');
+            
+            ws.onopen = () => {
+                wsDot.style.background = 'var(--green)';
+                wsDot.title = 'Connected';
+            };
+            
+            ws.onclose = ws.onerror = () => {
+                wsDot.style.background = 'var(--red)';
+                wsDot.title = 'Disconnected';
+            };
+
             liveInput.focus();
         }
 
