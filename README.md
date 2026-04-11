@@ -110,6 +110,7 @@ mpremote cp -r lib/* :/lib/
 
 ```bash
 mpremote cp index.html :
+mpremote cp settings.json :
 ```
 
 ### Copy main files to the root of the device
@@ -147,17 +148,29 @@ to download the log file.
 # Repository Structure
 
 ```
+.
+├── index.html
 ├── lib
-│   ├── access_point.py
-│   ├── api.py
-│   ├── keyboard.py
-│   ├── key_led.py
-│   ├── logger.py
-│   ├── microdot.py
-│   └── uart_buffer.py
+│   ├── access_point.py
+│   ├── api.py
+│   ├── keyboard.py
+│   ├── key_led.py
+│   ├── logger.py
+│   ├── mapper.py
+│   ├── microdot
+│   │   ├── helpers.py
+│   │   ├── microdot.py
+│   │   └── websocket.py
+│   ├── queue.py
+│   ├── settings.py
+│   ├── uart_buffer.py
+│   ├── wifi.py
+│   └── wifi_radio.py
+├── LICENSE
 ├── main.py
 ├── README.md
-└── resources.md
+├── resources.md
+└── settings.json
 ```
 
 ## Third-Party Libraries
