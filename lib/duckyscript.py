@@ -47,7 +47,7 @@ class DuckyScript:
                 raise ValueError(f"Invalid Syntax on line:{line_idx+ 1}: {line}")
             self.kbd.send_keys(key_codes)
             await asyncio.sleep_ms(20)
-            self.kbd.send_keys()
+            self.kbd.send_keys([])
     async def inject(self):
         for idx, line in enumerate(self.script.strip().splitlines()):
             await self.execute_line(line, idx)
