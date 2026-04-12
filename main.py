@@ -34,6 +34,7 @@ kbd = Keyboard()
 
 from api import DuckLoggerAPI
 from mapper import HIDEncoder, mod_map
+from duckyscript import DuckyScript
 import wifi_radio
 wifi_radio.start()
 
@@ -42,6 +43,7 @@ encoder = HIDEncoder()
 async def main():
     api = DuckLoggerAPI()
     remote_keys = api.keys
+    scripts = api.scripts
     asyncio.create_task(api.start_server())
     last_activity = time.ticks_ms()
 
@@ -49,6 +51,10 @@ async def main():
         if time.ticks_diff(time.ticks_ms(), last_activity) >= 10_000:
             log._flush()
             last_activity = time.ticks_ms()
+
+        if not scripts.is_empty():
+            ducky_script = DuckyScript(scripts.dequeue(), kbd)
+            await ducky_script.inject()
 
         if not remote_keys.is_empty():
             key = remote_keys.dequeue()

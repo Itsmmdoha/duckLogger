@@ -57,11 +57,10 @@ class DuckLoggerAPI:
         @self.app.route("/script", methods=["POST"])
         async def script_upload(request):
             """
-            Accepts a duckyscript via POST (raw text or form data)
+            Accepts a duckyscript via POST (raw text)
             and enqueues it for processing.
             """
-            script_text = (await request.body()).decode("utf-8")
-
+            script_text = request.body.decode("utf-8")
             # TODO: wil put validation here later
             if not script_text.strip():
                 return Response("Empty script", status_code=400)
