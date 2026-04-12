@@ -25,6 +25,9 @@ class DuckyScript:
         await asyncio.sleep_ms(milisecods)
 
     async def execute_line(self, line: str, line_idx: int):
+        line = line.strip()
+        if not line:
+            return
         if line.startswith("DELAY"):
             delay_time_str = get_command_value(line)
             try:
