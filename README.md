@@ -10,22 +10,21 @@ Recreating this project doesn't require any custom PCB. Hardware used here is le
 
 ## Features
 
-1. Records keystrokes and saves them to a log file in internal flash storage
-2. Automatically creates a Wi-Fi Access Point
-3. Download log file from web UI at:
+* **Keystroke Logging**: Records keystrokes and saves them to a log file in the internal flash storage.
+* **Dual Wi-Fi Modes**: Supports both Wi-Fi Station mode (connect to an existing network) and Access Point (Hotspot) mode.
+* **Web Command & Control Center**: Access a built-in web interface to manage your device. The control center allows you to:
+  * **Download Logs**: Easily download the saved keystroke log file.
+  * **Remote Live Keyboard**: Attach a live virtual keyboard and send keystrokes via WebSocket in real-time with almost no latency.
+  * **DuckyScript Injection**: Inject and execute DuckyScript payloads remotely.
+  * **Device Settings**: Update configurations for AP/Station mode directly from the web UI.
 
+Access the web UI at:
 ```
 http://192.168.4.1/
 ```
+*(When in Access Point mode)*
+
 <img width="900" height="593" alt="image" src="https://github.com/user-attachments/assets/67d575e3-b34c-44b1-bed4-a2505eab0ad3" />
-
-4. Remote keyboard control via browser
-
-Upcoming:
-
-6. Send Ducky scripts from the web UI
-
-
 
 
 ## Components Used
@@ -93,16 +92,28 @@ The flasher will automatically:
 3. The device will automatically:
 
    * Start logging keystrokes
-   * Create a Wi-Fi Access Point
+   * Connect to Wi-Fi or create a Wi-Fi Access Point depending on your settings
    * Start an HTTP server
 
-Connect to the Wi-Fi Access Point (Password: `duckPass1234`) and open:
+If in Access Point mode(Default), connect to the Wi-Fi Access Point (Default Password: `duckPass1234`) and open:
 
 ```
 http://192.168.4.1/
 ```
 
 To access the command and control center.
+
+
+## Supported DuckyScript Syntax
+
+DuckLogger currently supports a core set of DuckyScript commands for payload injection:
+
+| Command | Description | Example |
+| :--- | :--- | :--- |
+| `DELAY` | Pauses execution for a specified number of milliseconds. | `DELAY 500` |
+| `STRING` | Types out a sequence of characters exactly as written. | `STRING Hello, World!` |
+| **Key Combos** | Sends simultaneous keystrokes. | `CTRL SHIFT ESC` or `ALT i` |
+| **Single Keys** | Sends individual special keys. | `ENTER` or `TAB` |
 
 
 # Repository Structure
@@ -112,21 +123,23 @@ To access the command and control center.
 ├── flasher.py
 ├── index.html
 ├── lib
-│   ├── access_point.py
-│   ├── api.py
-│   ├── keyboard.py
-│   ├── key_led.py
-│   ├── logger.py
-│   ├── mapper.py
-│   ├── microdot
-│   │   ├── helpers.py
-│   │   ├── microdot.py
-│   │   └── websocket.py
-│   ├── queue.py
-│   ├── settings.py
-│   ├── uart_buffer.py
-│   ├── wifi.py
-│   └── wifi_radio.py
+│   ├── access_point.py
+│   ├── api.py
+│   ├── duckyscript.py
+│   ├── keyboard.py
+│   ├── key_led.py
+│   ├── logger.py
+│   ├── mapper.py
+│   ├── microdot
+│   │   ├── helpers.py
+│   │   ├── __init__.py
+│   │   ├── microdot.py
+│   │   └── websocket.py
+│   ├── queue.py
+│   ├── settings.py
+│   ├── uart_buffer.py
+│   ├── wifi.py
+│   └── wifi_radio.py
 ├── LICENSE
 ├── main.py
 ├── README.md
@@ -138,3 +151,5 @@ To access the command and control center.
 
 This project includes Microdot by Miguel Grinberg (MIT License):  
 https://github.com/miguelgrinberg/microdot
+
+---
