@@ -28,9 +28,9 @@ class DuckyScript:
         line = line.strip()
         if not line:
             return
-        if len(line.split(" ", 1)) <2:
-            raise ValueError(f"Invalid Syntax on line:{line_idx+ 1}: {line}")
         if line.startswith("DELAY"):
+            if len(line.split(" ", 1)) <2:
+                raise ValueError(f"SyntaxError: No argument on DELAY command:{line_idx+ 1}: {line}")
             delay_time_str = get_command_value(line)
             try:
                 delay_time = int(delay_time_str)
@@ -39,6 +39,8 @@ class DuckyScript:
                 raise ValueError(f"Invalid Syntax on line:{line_idx+ 1}: {line}")
 
         elif line.startswith("STRING"):
+            if len(line.split(" ", 1)) <2:
+                raise ValueError(f"SyntaxError: No argument on STRING command:{line_idx+ 1}: {line}")
             string = get_command_value(line)
             await self.send_string(string, line_idx=line_idx)
 
