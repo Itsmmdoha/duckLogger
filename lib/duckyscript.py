@@ -30,7 +30,7 @@ class DuckyScript:
             return
         if line.startswith("DELAY"):
             if len(line.split(" ", 1)) <2:
-                raise ValueError(f"SyntaxError: No argument on DELAY command:{line_idx+ 1}: {line}")
+                raise ValueError(f"SyntaxError: No argument on DELAY command -> line:{line_idx+ 1}")
             delay_time_str = get_command_value(line)
             try:
                 delay_time = int(delay_time_str)
@@ -40,7 +40,7 @@ class DuckyScript:
 
         elif line.startswith("STRING"):
             if len(line.split(" ", 1)) <2:
-                raise ValueError(f"SyntaxError: No argument on STRING command:{line_idx+ 1}: {line}")
+                raise ValueError(f"SyntaxError: No argument on STRING command -> line:{line_idx+ 1}")
             string = get_command_value(line)
             await self.send_string(string, line_idx=line_idx)
 
