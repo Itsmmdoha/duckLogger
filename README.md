@@ -24,8 +24,7 @@ http://192.168.4.1/
 ```
 *(When in Access Point mode)*
 
-<img width="900" height="593" alt="image" src="https://github.com/user-attachments/assets/67d575e3-b34c-44b1-bed4-a2505eab0ad3" />
-
+<img width="1920" height="1080" alt="ducklogger_screenshot" src="https://github.com/user-attachments/assets/1397c342-2860-4b81-96e6-4d2d7c6e1da4" />
 
 ## Components Used
 
