@@ -1,3 +1,4 @@
+import asyncio
 import os
 from microdot import Microdot, send_file, Response
 from microdot.websocket import WebSocketError, with_websocket
@@ -24,6 +25,7 @@ class DuckLoggerAPI:
         self.app = Microdot()
         self.keys = Queue()
         self.scripts = Queue()
+        self.script_execution = Queue()
         self.setup_routes()
 
     def setup_routes(self):
@@ -66,7 +68,13 @@ class DuckLoggerAPI:
                 return Response("Empty script", status_code=400)
 
             self.scripts.enqueue(script_text)
-            return Response("Script received", status_code=200)
+
+            while self.script_execution.is_empty():
+                await asyncio.sleep_ms(50)
+            execution_status = self.script_execution.dequeue()
+            if execution_status != "Success":
+                return Response(execution_status, status_code=400)
+            return Response("Script Executed Successfully", status_code=200)
 
         @self.app.route('/kbd')
         @with_websocket

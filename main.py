@@ -44,6 +44,7 @@ async def main():
     api = DuckLoggerAPI()
     remote_keys = api.keys
     scripts = api.scripts
+    script_execution = api.script_execution
     asyncio.create_task(api.start_server())
     last_activity = time.ticks_ms()
 
@@ -54,7 +55,11 @@ async def main():
 
         if not scripts.is_empty():
             ducky_script = DuckyScript(scripts.dequeue(), kbd)
-            await ducky_script.inject()
+            try:
+                await ducky_script.inject()
+                script_execution.enqueue("Success")
+            except ValueError as e:
+                script_execution.enqueue(str(e))
 
         if not remote_keys.is_empty():
             key = remote_keys.dequeue()
