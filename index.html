@@ -33,14 +33,45 @@
             flex-direction: column;
             gap: 10px;
         }
-        textarea {
+
+        /* IDE Editor Styles */
+        .editor-container {
+            display: flex;
             width: 100%;
             height: 300px;
-            background: transparent;
             border: 2px solid var(--green);
             border-radius: 8px;
+            background: var(--btn-bg);
+            overflow: hidden;
+        }
+        .line-numbers {
+            min-width: 25px; /* Thinner sidebar */
+            padding: 10px 5px;
+            background: rgba(32, 197, 107, 0.08);
+            color: var(--green);
+            text-align: right;
+            font-family: monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            user-select: none;
+            overflow: hidden;
+            white-space: pre; /* Fixes the numbers appearing side-by-side */
+            border-right: 1px solid var(--border);
+        }
+        #ducky-script {
+            flex-grow: 1;
+            height: 100%;
+            background: transparent;
+            border: none;
             color: var(--text);
             padding: 10px;
+            font-family: monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            resize: none;
+            outline: none;
+            white-space: pre; 
+            overflow: auto;
         }
 
         /* Bottom Button Group */
@@ -155,9 +186,10 @@
             border-radius: 8px;
             font-weight: bold;
             opacity: 0;
-            transition: opacity 0.3s;
+            transition: opacity 0.3s, background-color 0.3s;
             pointer-events: none;
             z-index: 1000;
+            text-align: center;
         }
         #toast.show { opacity: 1; }
     </style>
@@ -168,7 +200,10 @@
     <div id="toast">Success!</div>
 
     <div class="container">
-        <textarea id="ducky-script" placeholder="DuckyScript..."></textarea>
+        <div class="editor-container">
+            <div id="line-numbers" class="line-numbers">1</div>
+            <textarea id="ducky-script" placeholder="DuckyScript..." spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="none" wrap="off"></textarea>
+        </div>
         <button class="action-btn btn-green" style="align-self: flex-end;" onclick="injectScript()" title="Inject DuckyScript payload">Inject</button>
     </div>
 
@@ -241,12 +276,38 @@
     </div>
 
     <script>
+        // Editor Line Numbers Logic
+        const duckyScript = document.getElementById('ducky-script');
+        const lineNumbers = document.getElementById('line-numbers');
+        let currentLineCount = 1;
+
+        function updateLineNumbers() {
+            const lines = duckyScript.value.split('\n').length;
+            if (lines !== currentLineCount) {
+                let nums = '';
+                for (let i = 1; i <= lines; i++) {
+                    nums += i + '\n';
+                }
+                lineNumbers.textContent = nums;
+                currentLineCount = lines;
+            }
+        }
+
+        duckyScript.addEventListener('input', updateLineNumbers);
+        duckyScript.addEventListener('scroll', () => {
+            lineNumbers.scrollTop = duckyScript.scrollTop;
+        });
+
         // Feedback Toast Logic
-        function showToast(msg) {
+        let toastTimeout;
+        function showToast(msg, isError = false) {
             const toast = document.getElementById('toast');
             toast.textContent = msg;
+            toast.style.background = isError ? 'var(--red)' : 'var(--green)';
             toast.classList.add('show');
-            setTimeout(() => toast.classList.remove('show'), 2000);
+            
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => toast.classList.remove('show'), 3000);
         }
 
         // System API Calls
@@ -276,30 +337,30 @@
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
-            }).then(res => {
+            }).then(async res => {
+                const msg = await res.text();
                 btn.classList.add('active');
                 setTimeout(() => btn.classList.remove('active'), 150);
-                if(res.ok) showToast("Settings Saved!");
-                else showToast("Failed to save");
-            }).catch(() => showToast("Error saving settings"));
+                showToast(msg || (res.ok ? "Settings Saved!" : "Failed to save"), !res.ok);
+            }).catch(() => showToast("Error saving settings", true));
         }
 
         function deleteLog() {
             if(confirm("Are you sure you want to permanently delete the log file?")) {
-                fetch('/log', { method: 'DELETE' }).then(res => {
-                    if(res.ok) showToast("Logs Deleted!");
-                    else showToast("Failed to delete logs");
-                }).catch(() => showToast("Error deleting logs"));
+                fetch('/log', { method: 'DELETE' }).then(async res => {
+                    const msg = await res.text();
+                    showToast(msg || (res.ok ? "Logs Deleted!" : "Failed to delete logs"), !res.ok);
+                }).catch(() => showToast("Error deleting logs", true));
             }
         }
 
         // Action API Calls
         function injectScript() {
             const data = document.getElementById('ducky-script').value;
-            fetch('/script', { method: 'POST', body: data }).then(res => {
-                if(res.ok) showToast("Script Injected!");
-                else showToast("Injection Failed");
-            }).catch(() => showToast("Error during injection"));
+            fetch('/script', { method: 'POST', body: data }).then(async res => {
+                const msg = await res.text();
+                showToast(msg || (res.ok ? "Script Injected!" : "Injection Failed"), !res.ok);
+            }).catch(() => showToast("Error during injection", true));
         }
 
         // WebSocket & Keyboard Logic
