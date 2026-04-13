@@ -6,7 +6,6 @@ common_map = {
     42: "BKSP",
     43: "TAB",
     44: " ",
-    44: "SPACE",
     # Locks / function
     57: "CAPS",
     58: "F1", 59: "F2", 60: "F3", 61: "F4",
@@ -119,6 +118,7 @@ class HIDEncoder:
     """
     def __init__(self) -> None:
         self.common_map = invert_map(common_map)
+        self.common_map["SPACE"] = 44 # for when remote kbd sends SPACE instead of " "
         self.base_map = invert_map(base_map)
         self.shift_map = invert_map(shift_map)
         self.mod_map = invert_map(mod_map)
