@@ -28,6 +28,8 @@ class DuckyScript:
         line = line.strip()
         if not line:
             return
+        if len(line.split(" ", 1)) <2:
+            raise ValueError(f"Invalid Syntax on line:{line_idx+ 1}: {line}")
         if line.startswith("DELAY"):
             delay_time_str = get_command_value(line)
             try:
