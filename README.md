@@ -1,11 +1,11 @@
 # DuckLogger
 
-<img width="2559" height="1060" alt="image" src="https://github.com/user-attachments/assets/d3178370-de53-4aaa-916b-64b3155cc503" />
+![ducklogger](https://github.com/user-attachments/assets/d3178370-de53-4aaa-916b-64b3155cc503)
 
 DuckLogger is an ESP32-S3–based USB Key Logger. It logs keystrokes in a text file, and provides wireless access to download logs through a built-in Wi-Fi access point.
 Recreating this project doesn't require any custom PCB. Hardware used here is less than $10 in total on places like Aliexpress.
 
-<img width="2560" height="1440" alt="ducklogger" src="https://github.com/user-attachments/assets/f5aa82a2-3fc4-450a-a6cb-c52042ec13ce" />
+![broader view](https://github.com/user-attachments/assets/f5aa82a2-3fc4-450a-a6cb-c52042ec13ce)
 
 
 ## Features
@@ -24,7 +24,7 @@ http://192.168.4.1/
 ```
 *(When in Access Point mode)*
 
-<img width="1920" height="1080" alt="ducklogger_screenshot" src="https://github.com/user-attachments/assets/1397c342-2860-4b81-96e6-4d2d7c6e1da4" />
+![web command and control center of ducklogger](https://github.com/user-attachments/assets/1397c342-2860-4b81-96e6-4d2d7c6e1da4)
 
 ## Components Used
 
@@ -38,7 +38,7 @@ http://192.168.4.1/
 
 ## 1. Schematics
 
-<img width="2851" height="810" alt="image" src="https://github.com/user-attachments/assets/42f63b02-d19f-4c31-832d-3051c3bb02d1" />
+![wiring schematics](https://github.com/user-attachments/assets/42f63b02-d19f-4c31-832d-3051c3bb02d1)
 
 
 | ESP32-S3 | CH9350 |
@@ -50,7 +50,7 @@ http://192.168.4.1/
 
 The CH9350 supports multiple operating modes, which are configured using the onboard DIP switches.
 
-<img width="819" height="627" alt="image" src="https://github.com/user-attachments/assets/d8060d39-abb1-4d92-9ce8-8e2043ad1c0b" />
+![CH9350 dip switch config for host mode](https://github.com/user-attachments/assets/d8060d39-abb1-4d92-9ce8-8e2043ad1c0b)
 
 Set `S0` to the GND position (0) and keep all other switches in the opposite position (1). This enables USB Host Mode, which converts USB keyboard inputs into serial data sent via UART at a default baud rate of 115200.
 
