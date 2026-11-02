@@ -1,11 +1,11 @@
 {
-  "mode": "ap",
-  "ssid": "duckLogger",
-  "password": "duckPass1234",
   "device": {
     "role": "node",
     "id": "node-01",
     "local_ui": false
+  },
+  "management": {
+    "enabled": false
   },
   "mesh": {
     "enabled": true,

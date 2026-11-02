@@ -51,7 +51,9 @@ if settings.mesh_enabled and settings.role in ("node", "gateway"):
     )
     mesh.start()
 
-if settings.local_ui or settings.role == "standalone":
+if settings.management_enabled and (
+    settings.local_ui or settings.role == "standalone"
+):
     wifi_radio.start(
         settings,
         channel=settings.mesh_channel if mesh is not None else None,

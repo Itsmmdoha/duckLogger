@@ -1,11 +1,14 @@
 {
-  "mode": "ap",
-  "ssid": "meshops-gateway",
-  "password": "change-this-password",
   "device": {
     "role": "gateway",
     "id": "gateway-01",
     "local_ui": true
+  },
+  "management": {
+    "enabled": true,
+    "mode": "ap",
+    "ssid": "meshops-gateway",
+    "password": "change-this-password"
   },
   "mesh": {
     "enabled": true,

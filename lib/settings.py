@@ -8,16 +8,27 @@ class Settings:
         with open(path, "r") as f:
             settings_data = json_load(f)
 
-        # The original flat Wi-Fi settings remain supported for standalone
-        # DuckLogger installations.
-        self.mode = settings_data.get("mode", "ap")
-        self.ssid = settings_data.get("ssid", "duckLogger")
-        self.password = settings_data.get("password", "duckPass1234")
-
         device = settings_data.get("device", {})
         self.role = device.get("role", "standalone")
         self.node_id = device.get("id", "")
-        self.local_ui = bool(device.get("local_ui", self.role == "standalone"))
+
+        # Wi-Fi is a management interface, not the mesh transport. Preserve
+        # the original flat settings for standalone installations while
+        # allowing MeshOps devices to configure management Wi-Fi explicitly.
+        management = settings_data.get("management", {})
+        self.management_enabled = bool(management.get(
+            "enabled", device.get("local_ui", self.role == "standalone")
+        ))
+        self.mode = management.get(
+            "mode", settings_data.get("mode", "ap")
+        )
+        self.ssid = management.get(
+            "ssid", settings_data.get("ssid", "duckLogger")
+        )
+        self.password = management.get(
+            "password", settings_data.get("password", "duckPass1234")
+        )
+        self.local_ui = bool(device.get("local_ui", self.management_enabled))
 
         mesh = settings_data.get("mesh", {})
         self.mesh_enabled = bool(mesh.get(
