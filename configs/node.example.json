@@ -15,7 +15,13 @@
     "max_hops": 6,
     "route_interval_ms": 2000,
     "route_timeout_ms": 8000,
+    "route_failover_failures": 3,
+    "ack_timeout_ms": 800,
+    "max_retries": 3,
+    "queue_persist": false,
+    "queue_path": "mesh-outbox.json",
     "telemetry_interval_ms": 10000,
+    "telemetry_batch": 1,
     "max_pending": 128,
     "duplicate_cache": 128,
     "peer_key": ""

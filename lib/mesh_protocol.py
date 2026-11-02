@@ -11,9 +11,10 @@ except ImportError:  # CPython
     import json
 
 
-PROTOCOL_VERSION = 1
+PROTOCOL_VERSION = 2
 TYPE_ROUTE = "r"
 TYPE_DATA = "d"
+TYPE_ACK = "a"
 MAX_PACKET_BYTES = 240
 EVENT_KINDS = ("heartbeat", "synthetic_counter", "link_test")
 
@@ -51,6 +52,19 @@ def data_packet(network_id, source_id, sequence, ttl, event_kind,
         "l": int(ttl),
         "k": event_kind,
         "x": event_value,
+        "h": 1,
+    }
+
+
+def ack_packet(network_id, source_id, sequence, ttl):
+    """A hop-by-hop-routed acknowledgement for one telemetry sequence."""
+    return {
+        "v": PROTOCOL_VERSION,
+        "n": network_id,
+        "t": TYPE_ACK,
+        "s": source_id,
+        "q": int(sequence),
+        "l": int(ttl),
     }
 
 
@@ -87,6 +101,8 @@ def decode_packet(raw, expected_network=None):
         required = ("g", "s", "h", "q")
     elif packet_type == TYPE_DATA:
         required = ("s", "q", "l", "k", "x")
+    elif packet_type == TYPE_ACK:
+        required = ("s", "q", "l")
     else:
         raise ProtocolError("unknown packet type")
 
@@ -102,6 +118,14 @@ def decode_packet(raw, expected_network=None):
         for key in ("q", "l"):
             if not isinstance(packet.get(key), int) or packet[key] < 0:
                 raise ProtocolError("invalid data metric")
+        if "h" in packet and (not isinstance(packet["h"], int) or packet["h"] < 0):
+            raise ProtocolError("invalid hop metric")
+    elif packet_type == TYPE_ACK:
+        if not isinstance(packet.get("s"), str) or not packet["s"]:
+            raise ProtocolError("invalid acknowledgement source")
+        for key in ("q", "l"):
+            if not isinstance(packet.get(key), int) or packet[key] < 0:
+                raise ProtocolError("invalid acknowledgement metric")
     else:
         for key in ("h", "q"):
             if not isinstance(packet.get(key), int) or packet[key] < 0:
@@ -130,16 +154,20 @@ class DuplicateCache:
 
 
 class RouteState:
-    """Selected next hop towards a single gateway/root."""
+    """Select a fresh parent toward one gateway, with failure-aware failover."""
 
-    def __init__(self, configured_gateway="", max_hops=8):
+    def __init__(self, configured_gateway="", max_hops=8,
+                 failover_failures=3, failover_cooldown_ms=8000):
         self.configured_gateway = configured_gateway
         self.max_hops = max_hops
+        self.failover_failures = max(1, int(failover_failures))
+        self.failover_cooldown_ms = max(1, int(failover_cooldown_ms))
         self.gateway_id = ""
         self.parent_id = ""
         self.parent_mac = None
         self.hop_count = None
         self.last_seen_ms = 0
+        self.candidates = {}
 
     @property
     def available(self):
@@ -151,6 +179,71 @@ class RouteState:
         self.parent_mac = None
         self.hop_count = None
         self.last_seen_ms = 0
+        self.candidates = {}
+
+    def _select(self, now_ms=None):
+        eligible = []
+        for mac, candidate in self.candidates.items():
+            cooling_down = (
+                now_ms is not None and candidate["blocked_until"] is not None
+                and time_diff(candidate["blocked_until"], now_ms) > 0
+            )
+            if (not cooling_down and now_ms is not None
+                    and candidate["blocked_until"] is not None):
+                candidate["failures"] = 0
+                candidate["blocked_until"] = None
+            if candidate["failures"] < self.failover_failures and not cooling_down:
+                age = (time_diff(now_ms, candidate["last_seen"])
+                       if now_ms is not None else 0)
+                eligible.append((candidate["hops"], candidate["failures"],
+                                  age, mac, candidate))
+        if not eligible:
+            self.gateway_id = ""
+            self.parent_id = ""
+            self.parent_mac = None
+            self.hop_count = None
+            self.last_seen_ms = 0
+            return
+        eligible.sort()
+        _, _, _, mac, candidate = eligible[0]
+        self.gateway_id = candidate["gateway"]
+        self.parent_id = candidate["parent"]
+        self.parent_mac = mac
+        self.hop_count = candidate["hops"]
+        self.last_seen_ms = candidate["last_seen"]
+
+    def record_send(self, mac, success, now_ms=None):
+        """Update a candidate's consecutive delivery failures; return on switch."""
+        candidate = self.candidates.get(mac)
+        if candidate is None:
+            return False
+        previous = self.parent_mac
+        if success:
+            candidate["failures"] = 0
+            candidate["blocked_until"] = None
+        else:
+            candidate["failures"] += 1
+            if candidate["failures"] >= self.failover_failures:
+                if now_ms is None:
+                    now_ms = candidate["last_seen"]
+                try:
+                    import time
+                    candidate["blocked_until"] = time.ticks_add(
+                        now_ms, self.failover_cooldown_ms
+                    )
+                except AttributeError:
+                    candidate["blocked_until"] = now_ms + self.failover_cooldown_ms
+        self._select(now_ms)
+        return previous is not None and self.parent_mac != previous
+
+    def expire(self, now_ms, timeout_ms):
+        stale = []
+        for mac, candidate in self.candidates.items():
+            if time_diff(now_ms, candidate["last_seen"]) > timeout_ms:
+                stale.append(mac)
+        for mac in stale:
+            del self.candidates[mac]
+        self._select(now_ms)
 
     def consider(self, own_id, sender_mac, packet, now_ms):
         """Select a better parent or refresh the currently selected parent."""
@@ -167,15 +260,25 @@ class RouteState:
         if candidate_hops > self.max_hops:
             return False
 
-        same_parent = self.parent_mac == sender_mac
-        better = self.hop_count is None or candidate_hops < self.hop_count
-        if not (same_parent or better):
-            return False
+        candidate = self.candidates.get(sender_mac)
+        self.candidates[sender_mac] = {
+            "gateway": gateway_id,
+            "parent": sender_id,
+            "hops": candidate_hops,
+            "last_seen": now_ms,
+            # Route advertisements refresh reachability, not delivery quality.
+            "failures": candidate["failures"] if candidate else 0,
+            "blocked_until": candidate["blocked_until"] if candidate else None,
+        }
+        previous = (self.parent_mac, self.hop_count)
+        self._select(now_ms)
+        return previous != (self.parent_mac, self.hop_count)
 
-        changed = not same_parent or self.hop_count != candidate_hops
-        self.gateway_id = gateway_id
-        self.parent_id = sender_id
-        self.parent_mac = sender_mac
-        self.hop_count = candidate_hops
-        self.last_seen_ms = now_ms
-        return changed
+
+def time_diff(now, then):
+    """ticks_diff-compatible subtraction for the small positive timeout window."""
+    try:
+        import time
+        return time.ticks_diff(now, then)
+    except AttributeError:  # CPython protocol simulations
+        return now - then

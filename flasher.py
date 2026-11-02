@@ -9,6 +9,9 @@ import sys
 import os
 import shutil
 import gzip
+import argparse
+import json
+import shlex
 
 
 def run(cmd, desc=""):
@@ -48,6 +51,23 @@ def wait_for_board():
         input()
 
 
+parser = argparse.ArgumentParser(description="Flash DuckLogger/MeshOps to a MicroPython board")
+parser.add_argument(
+    "--settings",
+    default="settings.json",
+    help="settings JSON to install on this board (default: settings.json)",
+)
+args = parser.parse_args()
+settings_path = os.path.abspath(args.settings)
+try:
+    with open(settings_path, "r", encoding="utf-8") as settings_file:
+        board_settings = json.load(settings_file)
+except (OSError, ValueError) as exc:
+    parser.error("cannot read settings file %s: %s" % (settings_path, exc))
+
+mesh_only = bool(board_settings.get("device", {}).get("mesh_only", False))
+
+
 # Install mpremote
 step("Install mpremote")
 run(f"{sys.executable} -m pip install mpremote --quiet", "Installing mpremote")
@@ -57,27 +77,30 @@ require("mpremote")
 step("Detect board")
 wait_for_board()
 
-# Install packages on board
-step("Install MicroPython packages")
-run("mpremote mip install usb-device",          "usb-device")
-run("mpremote mip install usb-device-keyboard", "usb-device-keyboard")
+# Install packages and web assets only for the original HID/UI firmware.
+if not mesh_only:
+    step("Install MicroPython packages")
+    run("mpremote mip install usb-device", "usb-device")
+    run("mpremote mip install usb-device-keyboard", "usb-device-keyboard")
 
-# Compress index.html
-step("Compress index.html")
-compress("index.html", "index.html.gz")
-print("  index.html -> index.html.gz")
+    step("Compress index.html")
+    compress("index.html", "index.html.gz")
+    print("  index.html -> index.html.gz")
 
 # Copy files to board
 step("Copy files to board")
 run("mpremote cp -r lib/* :/lib/", "lib/* -> /lib/")
-run("mpremote cp index.html.gz :",  "index.html.gz -> /")
-run("mpremote cp settings.json :", "settings.json -> /")
+if not mesh_only:
+    run("mpremote cp index.html.gz :", "index.html.gz -> /")
+run("mpremote cp %s :settings.json" % shlex.quote(settings_path),
+    "%s -> /settings.json" % args.settings)
 run("mpremote cp main.py :",       "main.py -> /")
 
 # Cleanup
 step("Cleanup")
-os.remove("index.html.gz")
-print("  Removed index.html.gz")
+if not mesh_only:
+    os.remove("index.html.gz")
+    print("  Removed index.html.gz")
 
 # Reboot
 step("Reboot board")

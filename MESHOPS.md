@@ -57,6 +57,10 @@ place a second node where it can reach the first node but not the gateway.
 Measure delivery, hop count, recovery after a node restart, and behavior when
 the parent route expires. Keep test payloads synthetic.
 
+Protocol version 2 adds application acknowledgements. Update every node and
+the gateway in the same maintenance window before measuring; mixed protocol
+versions do not provide end-to-end delivery confirmation.
+
 ## Current protocol behavior
 
 * Gateways broadcast periodic root advertisements with hop count zero.
@@ -66,10 +70,32 @@ the parent route expires. Keep test payloads synthetic.
   events are deduplicated by source ID and sequence number, then relayed with
   a decremented TTL.
 * Nodes retain their own queued events while no route is available. The queue
-  is bounded; oldest events are dropped when full.
+  is bounded; oldest events are dropped when full. Optional `queue_persist`
+  stores synthetic events and the sequence counter in a local flash outbox.
+* The gateway sends an application ACK. Nodes retry missing ACKs up to
+  `max_retries` times after the initial transmission, then record retry
+  exhaustion and discard the event.
+* Relays remember the reverse path for an event so its ACK can travel back to
+  the source. Duplicate data is not logged twice at the gateway, but is
+  forwarded again when needed to recover a lost ACK.
+* Nodes rank fresh routes by hop count. After `route_failover_failures`
+  consecutive delivery failures, a parent is held out for one route timeout;
+  another fresh parent can take over. An ACK resets that parent's failure
+  count.
 * Routes expire after `route_timeout_ms` without an advertisement.
 
+`/mesh/status` reports sends, receives, deliveries, retries, retry exhaustion,
+route failovers, pending queue depth, route candidates, and average
+queue-to-ACK time. This timing includes queueing and retries, so it is not a
+one-way latency measurement. The gateway's NDJSON log records its local
+monotonic receive time, synthetic event fields, hop count, and last-hop MAC.
+Use `telemetry_batch` with `telemetry_interval_ms` to set repeatable synthetic
+load levels. `queue_persist` is disabled by default because outbox updates write
+to flash; enable it for reboot-recovery experiments.
+
 ESP-NOW, Wi-Fi AP operation and the exact MicroPython build should be validated
-on the target ESP32-S3 boards. The prototype does not yet implement persistent
-queue recovery, link-quality scoring, acknowledgements/retries, OTA, or the
-gateway's external radio adapter.
+on the target ESP32-S3 boards. Route scoring currently uses hop count and
+application ACK failures, not RSSI/SNR. Device clocks are not synchronized, so
+gateway receive timestamps cannot be directly compared with node timestamps.
+Outbox persistence is best-effort. OTA and an external radio adapter are not
+implemented.

@@ -14,11 +14,12 @@ class MeshStore:
 
     def append(self, packet, sender_mac=None):
         record = {
-            "received_ms": time.ticks_ms(),
+            "gateway_received_ms": time.ticks_ms(),
             "source": packet.get("s"),
             "sequence": packet.get("q"),
             "kind": packet.get("k"),
             "value": packet.get("x", 0),
+            "hop_count": packet.get("h", 0),
         }
         if sender_mac is not None:
             record["last_hop"] = "".join("%02x" % byte for byte in sender_mac)
