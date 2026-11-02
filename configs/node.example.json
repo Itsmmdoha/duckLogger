@@ -1,0 +1,23 @@
+{
+  "mode": "ap",
+  "ssid": "duckLogger",
+  "password": "duckPass1234",
+  "device": {
+    "role": "node",
+    "id": "node-01",
+    "local_ui": false
+  },
+  "mesh": {
+    "enabled": true,
+    "network_id": "lab-mesh",
+    "gateway_id": "gateway-01",
+    "channel": 6,
+    "max_hops": 6,
+    "route_interval_ms": 2000,
+    "route_timeout_ms": 8000,
+    "telemetry_interval_ms": 10000,
+    "max_pending": 128,
+    "duplicate_cache": 128,
+    "peer_key": ""
+  }
+}

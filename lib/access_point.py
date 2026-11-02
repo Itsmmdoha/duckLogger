@@ -7,24 +7,25 @@ class AccessPoint:
         self.password = password
         self.ap = network.WLAN(network.AP_IF)
 
-    def start(self):
+    def start(self, channel=None):
         if not self.ap.active():
             self.ap.active(True)
 
         # Decide mode based on password
         if self.password:
             # Secured network (WPA2)
-            self.ap.config(
-                essid=self.ssid,
-                password=self.password,
-                authmode=3
-            )
+            config = {
+                "essid": self.ssid,
+                "password": self.password,
+                "authmode": 3,
+            }
         else:
             # Open network
-            self.ap.config(
-                essid=self.ssid,
-                authmode=0
-            )
+            config = {"essid": self.ssid, "authmode": 0}
+
+        if channel is not None:
+            config["channel"] = int(channel)
+        self.ap.config(**config)
 
         ip = self.ap.ifconfig()[0]
 

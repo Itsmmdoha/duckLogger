@@ -3,7 +3,7 @@ import os
 from microdot import Microdot, send_file, Response
 from microdot.websocket import WebSocketError, with_websocket
 from queue import Queue
-from json import dump as json_dump
+from json import dump as json_dump, load as json_load, dumps as json_dumps
 
 FILE_PATH = "log.txt"
 
@@ -21,11 +21,15 @@ class DuckLoggerAPI:
      - keys:  for storing incoming keys from remote kbd
      - script: for storing incoming duckyscripts
     """
-    def __init__(self) -> None:
+    def __init__(self, mesh=None, mesh_log_path="mesh-log.jsonl",
+                 hid_controls=True) -> None:
         self.app = Microdot()
         self.keys = Queue()
         self.scripts = Queue()
         self.script_execution = Queue()
+        self.mesh = mesh
+        self.mesh_log_path = mesh_log_path
+        self.hid_controls = hid_controls
         self.setup_routes()
 
     def setup_routes(self):
@@ -62,6 +66,9 @@ class DuckLoggerAPI:
             Accepts a duckyscript via POST (raw text)
             and enqueues it for processing.
             """
+            if not self.hid_controls:
+                return Response("HID controls are disabled on this gateway",
+                                status_code=409)
             script_text = request.body.decode("utf-8")
             # TODO: wil put validation here later
             if not script_text.strip():
@@ -79,6 +86,9 @@ class DuckLoggerAPI:
         @self.app.route('/kbd')
         @with_websocket
         async def kbd(request, ws):
+            if not self.hid_controls:
+                await ws.close()
+                return
             while True:
                 try:
                     message = await ws.receive()
@@ -100,18 +110,50 @@ class DuckLoggerAPI:
         async def update_settings(request):
             try:
                 settings = request.json
+                try:
+                    with open("settings.json", "r") as f:
+                        settings_data = json_load(f)
+                except (OSError, ValueError):
+                    settings_data = {}
+                # Preserve MeshOps/device fields when the legacy web UI edits
+                # only the Wi-Fi portion of the settings file.
+                settings_data.update({
+                    "mode": settings["mode"],
+                    "ssid": settings["ssid"],
+                    "password": settings["password"],
+                })
                 with open("settings.json", "w") as f:
-                    settings_data = {
-                        "mode" : settings["mode"],
-                        "ssid" : settings["ssid"],
-                        "password" : settings["password"]
-                    }
                     json_dump(settings_data, f)
                 return "Success", 200
             except:
                 return "Invalid Settings", 400
 
+        if self.mesh is not None:
+            @self.app.route("/mesh/status", methods=["GET"])
+            async def mesh_status(request):
+                return Response(
+                    json_dumps(self.mesh.status()),
+                    headers={"Content-Type": "application/json"},
+                )
+
+            @self.app.route("/mesh/log", methods=["GET"])
+            async def mesh_log(request):
+                try:
+                    return send_file(
+                        self.mesh_log_path,
+                        content_type="application/x-ndjson",
+                    )
+                except OSError:
+                    return "file not found", 404
+
+            @self.app.route("/mesh/log", methods=["DELETE"])
+            async def delete_mesh_log(request):
+                try:
+                    os.remove(self.mesh_log_path)
+                    return "deleted", 200
+                except OSError:
+                    return "file not found", 404
+
     def start_server(self):
         """returns awaitable coroutine"""
         return self.app.start_server(host="0.0.0.0", port=80)
-

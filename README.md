@@ -1,5 +1,9 @@
 # DuckLogger
 
+> MeshOps development happens on the `codex/meshops-core` branch. See
+> [MESHOPS.md](MESHOPS.md) for the ESP-NOW collection-tree research prototype,
+> node/gateway setup, and current limitations.
+
 ![ducklogger](https://github.com/user-attachments/assets/d3178370-de53-4aaa-916b-64b3155cc503)
 
 DuckLogger is an ESP32-S3–based USB Key Logger. It logs keystrokes in a text file, and provides wireless access to download logs through a built-in Wi-Fi access point.
@@ -64,8 +68,9 @@ After flashing, disconnect and reconnect the board via USB.
 ## 3. Clone the Repository
 
 ```bash
-git clone https://github.com/Itsmmdoha/duckLogger.git
-cd duckLogger
+git clone https://github.com/JoseAbreu28/DuckLogger-MeshOps.git
+cd DuckLogger-MeshOps
+git switch codex/meshops-core
 ```
 
 ## 4. Install DuckLogger on the Board
