@@ -1,12 +1,64 @@
-# DuckLogger
+# DuckLogger MeshOps
 
-> MeshOps development happens on the `codex/meshops-core` branch. See
-> [MESHOPS.md](MESHOPS.md) for the ESP-NOW collection-tree research prototype,
-> node/gateway setup, and current limitations.
+> **Research prototype for authorized red-team engagements and lab testing.**
+> Use only on equipment and networks for which you have explicit authorization.
+> MeshOps telemetry is synthetic; this prototype does not send keyboard logs
+> or file contents through the mesh.
+
+DuckLogger MeshOps is a research adaptation of the existing DuckLogger
+ESP32-S3 project. The original DuckLogger core is retained; this repository
+adds an experimental local mesh so a deployment can be studied without
+requiring a separately managed Wi-Fi access point at every device location.
+It is intended to help evaluate coverage, multi-hop forwarding, and recovery
+in an authorized office engagement. It is not a production-ready or covert
+communications system.
+
+## MeshOps architecture
+
+The minimum topology is **one node (implant) and one gateway**. A node
+originates synthetic telemetry and can also relay telemetry from other nodes.
+Add nodes to extend the local multi-hop collection tree; the gateway is the
+root and exposes received events through its local API.
+
+```mermaid
+flowchart LR
+    N1[Node A<br/>producer + relay] --> G[Gateway / root]
+    N2[Node B<br/>producer + relay] --> N1
+    N3[Node C<br/>producer + relay] --> N2
+    G --> R[Optional external receiver]
+```
+
+The current mesh transport is **ESP-NOW**. The optional external receiver
+shown above is an extension point: a LoRa or other external radio link is not
+implemented. This prototype also does not remove the need to plan or validate
+radio coverage; test the actual office environment and target hardware before
+drawing conclusions.
+
+### What was added
+
+- A versioned, compact telemetry protocol with event validation,
+  deduplication, and time-to-live handling.
+- Gateway root advertisements and node route selection with a configurable
+  hop limit and route expiry.
+- Node event generation and multi-hop forwarding using synthetic counters;
+  queues are bounded when a route is unavailable.
+- Gateway storage of received events in NDJSON and local `/mesh/status` and
+  `/mesh/log` endpoints.
+- Example node/gateway configurations and this setup guide.
+
+The event allowlist currently contains `heartbeat`, `synthetic_counter`, and
+`link_test`, with integer values. The mesh does not accept arbitrary file
+contents. The original HID and local logging components remain part of the
+upstream-derived core and are kept separate from the MeshOps telemetry path.
+
+For protocol behavior, configuration fields, and known limitations, see
+[`MESHOPS.md`](MESHOPS.md).
 
 ![ducklogger](https://github.com/user-attachments/assets/d3178370-de53-4aaa-916b-64b3155cc503)
 
-DuckLogger is an ESP32-S3–based USB Key Logger. It logs keystrokes in a text file, and provides wireless access to download logs through a built-in Wi-Fi access point.
+The upstream DuckLogger core is an ESP32-S3 USB HID and local logging project.
+MeshOps is an experimental extension; it does not change the core's purpose or
+make its HID/logging features part of the mesh.
 Recreating this project doesn't require any custom PCB. Hardware used here is less than $10 in total on places like Aliexpress.
 
 ![broader view](https://github.com/user-attachments/assets/f5aa82a2-3fc4-450a-a6cb-c52042ec13ce)
@@ -70,8 +122,11 @@ After flashing, disconnect and reconnect the board via USB.
 ```bash
 git clone https://github.com/JoseAbreu28/DuckLogger-MeshOps.git
 cd DuckLogger-MeshOps
-git switch codex/meshops-core
 ```
+
+MeshOps is currently developed on `codex/meshops-core`. Until that work is
+merged, check it out with `git switch codex/meshops-core` before following the
+MeshOps setup below.
 
 ## 4. Install DuckLogger on the Board
 
@@ -88,6 +143,37 @@ The flasher will automatically:
 * Reboot the board
 
 ---
+
+# Original DuckLogger core
+
+The upstream core and its existing features remain in the repository. The
+sections below describe that inherited project; MeshOps telemetry is a
+separate, synthetic-only path. For authorized research, avoid collecting or
+transmitting real user input and use isolated test equipment.
+
+## MeshOps bench setup
+
+1. Flash a supported ESP32-S3 board with a compatible MicroPython build and
+   install the project using the existing `python flasher.py` workflow above.
+2. Copy `configs/gateway.example.json` to the gateway board as
+   `/settings.json`.
+3. Copy `configs/node.example.json` to every node as `/settings.json`. Give
+   each node a unique `device.id`.
+4. Configure the same `mesh.network_id` and `mesh.channel` on every device.
+   If using `mesh.peer_key`, set the same 16-byte key on all of them. Change
+   example AP credentials before connecting outside an isolated bench.
+5. Start with one node and one gateway. For a relay test, add a second node
+   positioned so it can reach the first node but not the gateway. Use only
+   synthetic events.
+6. On the gateway, inspect `GET /mesh/status` and `GET /mesh/log` to observe
+   mesh state and received NDJSON events.
+
+ESP-NOW behavior, Wi-Fi AP coexistence/channel constraints, and the exact
+MicroPython build still require validation on the target ESP32-S3 hardware.
+The prototype has no persistent queue recovery, link-quality scoring,
+acknowledgements/retries, OTA, or external radio adapter. Do not treat the
+prototype as a dependable transport or as a substitute for an engagement's
+approved rules of engagement.
 
 # Usage
 
@@ -126,9 +212,15 @@ DuckLogger currently supports a core set of DuckyScript commands for payload inj
 .
 ├── flasher.py
 ├── index.html
+├── configs
+│   ├── gateway.example.json
+│   └── node.example.json
 ├── lib
 │   ├── access_point.py
 │   ├── api.py
+│   ├── mesh_network.py
+│   ├── mesh_protocol.py
+│   ├── mesh_store.py
 │   ├── duckyscript.py
 │   ├── keyboard.py
 │   ├── key_led.py
@@ -146,6 +238,7 @@ DuckLogger currently supports a core set of DuckyScript commands for payload inj
 │   └── wifi_radio.py
 ├── LICENSE
 ├── main.py
+├── MESHOPS.md
 ├── README.md
 ├── resources.md
 └── settings.json
