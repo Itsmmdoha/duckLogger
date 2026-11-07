@@ -25,8 +25,10 @@ remain deployment work.
   `X-API-Key` (`lib/api.py:41-46`).
 - Egress backends are independently queued `log`, `wifi`, native SX1262
   `lora`, and UART companion `sendmy`; `lora_sink` stores and serves batches.
+  Send My buffers key events and emits one timed v1/v2 batch per
+  `sendmy.batch_interval_ms`, capped by `sendmy.batch_size`.
 - Whole-network validation/rendering and exact-MAC installer flows are implemented.
-- Tests: 102 CPython pytest tests; CI runs `pytest -q` and `compileall`.
+- Tests: 116 CPython pytest tests; CI runs `pytest -q` and `compileall`.
 - The ESP-NOW mesh has no message authentication, replay protection, or
   per-device keys. The separate LoRa uplink uses a shared-key HMAC.
   `mesh.peer_macs` is a spoofable filtering allowlist, not an identity.

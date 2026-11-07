@@ -22,7 +22,9 @@ class MeshStore:
     def append(self, packet, sender_mac=None):
         record = {
             "gateway_received_ms": _ticks_ms(),
+            "network_id": packet.get("n", ""),
             "source": packet.get("s"),
+            "boot_id": packet.get("b", "legacy"),
             "sequence": packet.get("q"),
             "kind": packet.get("k"),
             "value": packet.get("x", 0),

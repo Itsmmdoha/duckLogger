@@ -156,13 +156,20 @@ class Settings:
         self.sendmy_baudrate = int(sendmy.get("baudrate", 115200))
         self.sendmy_max_message_bytes = int(sendmy.get("max_message_bytes", 180))
         self.sendmy_max_pending = int(sendmy.get("max_pending", 64))
+        self.sendmy_batch_interval_ms = int(
+            sendmy.get("batch_interval_ms", 60000)
+        )
+        self.sendmy_batch_size = int(sendmy.get("batch_size", 32))
         self.sendmy_spool_path = sendmy.get("spool_path", "sendmy-outbox.json")
 
         egress = settings_data.get("egress", {})
         if not isinstance(egress, dict):
             raise ValueError("egress must be an object")
-        self.egress_enabled = bool(egress.get("enabled", False))
-        self.egress_backend = egress.get("backend", "none")
+        gateway_default = self.role == "gateway"
+        self.egress_enabled = bool(egress.get("enabled", gateway_default))
+        self.egress_backend = egress.get(
+            "backend", "log" if gateway_default else "none"
+        )
         self.egress_backends = egress.get(
             "backends", [self.egress_backend] if self.egress_enabled else []
         )
@@ -216,6 +223,8 @@ class Settings:
             raise ValueError("device.role must be node, gateway, lora_sink or standalone")
 
         if self.role == "lora_sink":
+            if egress:
+                raise ValueError("egress configuration belongs to the gateway role")
             if self.mesh_enabled:
                 raise ValueError("lora_sink must set mesh.enabled=false")
             if not self.management_enabled:
@@ -309,6 +318,12 @@ class Settings:
                 raise ValueError("sendmy.max_message_bytes must be between 32 and 220")
             if not 1 <= self.sendmy_max_pending <= 1024:
                 raise ValueError("sendmy.max_pending must be between 1 and 1024")
+            if not 1000 <= self.sendmy_batch_interval_ms <= 86400000:
+                raise ValueError(
+                    "sendmy.batch_interval_ms must be between 1000 and 86400000"
+                )
+            if not 1 <= self.sendmy_batch_size <= 256:
+                raise ValueError("sendmy.batch_size must be between 1 and 256")
             if self.sendmy_baudrate < 1200:
                 raise ValueError("sendmy.baudrate must be at least 1200")
         if (self.role == "gateway" and self.network_direct_sendmy
@@ -332,6 +347,12 @@ class Settings:
                 raise ValueError(
                     "management.api_token must be at least 16 characters"
                 )
+
+        if self.role != "gateway" and egress:
+            raise ValueError("egress configuration belongs to the gateway role")
+
+        if self.role == "gateway" and not self.egress_enabled:
+            raise ValueError("gateway must keep egress enabled")
 
         if self.egress_enabled:
             if self.role != "gateway":

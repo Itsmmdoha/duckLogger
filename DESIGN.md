@@ -57,7 +57,7 @@ Redesign DuckLogger MeshOps as an active-keylogger mesh:
 | Term | Meaning |
 | --- | --- |
 | Implant | ESP32-S3 DuckLogger keylogger and ESP-NOW mesh node. Captures decoded key events. |
-| Gateway | Mesh root that stores events and forwards them to external egress. |
+| Gateway | Mesh root that stores events and executes configured egress functions. |
 | Relay | Any implant that forwards another implant's packets toward a gateway. |
 | `lora_sink` | External SX1262 receiver with authenticated local web console. |
 | Send My | BLE/Apple Find My upload path implemented by `positive-security/send-my`. |
@@ -104,6 +104,7 @@ Redesign DuckLogger MeshOps as an active-keylogger mesh:
 
 - FR-5.1 Gateway egress supports `wifi`, `lora`, and `sendmy`.
 - FR-5.2 Each gateway selects its active egress in the network plan.
+- FR-5.2a Every gateway keeps egress active; `log` is the local-only fallback.
 - FR-5.3 `wifi` uses an infrastructure STA connection and an HTTPS collector.
 - FR-5.4 `lora` uses the native SX1262 link to one `lora_sink`.
 - FR-5.5 `sendmy` uses a Send My modem and is retrieved through the Send My DataFetcher.
@@ -126,6 +127,7 @@ Redesign DuckLogger MeshOps as an active-keylogger mesh:
 ### FR-7 — LoRa sink console
 
 - FR-7.1 `lora_sink` receives, authenticates, reassembles, and deduplicates LoRa batches.
+- FR-7.1a `lora_sink` is an egress destination and never owns an egress configuration.
 - FR-7.2 It displays live key events and reconstructed text per implant and session.
 - FR-7.3 It derives direct versus relay paths from hop metadata.
 - FR-7.4 It shows gateway identity, last-seen time, event counters, RSSI/SNR, and queue health.
@@ -250,7 +252,9 @@ Conceptual fields:
     "enabled": false,
     "modem_id": "42424242",
     "placement": "companion",
-    "max_message_bytes": 180
+    "max_message_bytes": 180,
+    "batch_interval_ms": 60000,
+    "batch_size": 32
   }
 }
 ```
@@ -265,7 +269,8 @@ Each board receives a nested `settings.json` derived from the plan:
 - `delivery`: gateway list and mode (`best`, `primary`, `all`).
 - `uplink`: per-implant `mesh` and `sendmy` booleans.
 - `egress`: gateway backend selection plus backend-specific settings.
-- `sendmy`: modem UART, modem ID, queue limits, message format version.
+- `sendmy`: modem UART, modem ID, queue limits, message format version,
+  `batch_interval_ms`, `batch_size`.
 - `management`: AP/STA mode, credentials, API token.
 - `lora`: SX1262 pins, frequency, modulation, key, retry policy.
 - `storage`: paths, rotation, retention.
@@ -390,8 +395,13 @@ macOS with OpenHaystack and the Send My DataFetcher.
 
 - Use a versioned compact line or JSON object:
   `network_id`, `implant_id`, `boot_id`, `sequence`, `kind`, payload.
+- Buffer events and emit on a timer. One event uses v1; two or more events use a
+  compact v2 batch that preserves source, boot ID, and sequence per record.
+  `sendmy.batch_interval_ms` (default 60000) sets the timer and
+  `sendmy.batch_size` (default 32) caps the records per message.
 - Keep each message at or below a configured byte limit (for example 180 bytes),
-  calibrated on hardware; never fragment at the Send My layer.
+  calibrated on hardware; never fragment at the Send My layer. If the encoded
+  batch exceeds the limit, send fewer records in that batch.
 - Prefer `key_event` records and periodic heartbeat summaries.
 - If the queue is full or the message is too large, drop the oldest event and count it.
 - Use the same event identity for deduplication when the DataFetcher output is imported.
@@ -417,7 +427,7 @@ macOS with OpenHaystack and the Send My DataFetcher.
 
 - `wifi`: STA mode, HTTPS POST of bounded JSON batches, 2xx success, TLS validation.
 - `lora`: authenticated fragmented SX1262 frames to `lora_sink`, bitmap ACKs, retries.
-- `sendmy`: UART line to a Send My modem, bounded persistent queue, no ACK.
+- `sendmy`: timed UART batches to a Send My modem, bounded persistent queue, no ACK.
 
 ### 11.2 Selection
 

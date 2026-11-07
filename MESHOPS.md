@@ -102,14 +102,21 @@ end-to-end delivery confirmation.
   packets from unknown MACs are dropped before decoding or relaying.
   Listed peers are registered with the ESP-NOW LMK at startup so encrypted
   packets can be received before either side has transmitted directly.
-* The gateway can forward each stored record to independent egress backends
+* The gateway owns egress and forwards each stored record to one or more
+  independent backends
   (`log`, `wifi`, `lora`, or `sendmy`). Egress is batched, bounded, persisted to a local spool,
-  and retried with bounded exponential backoff. Wi-Fi
+  and retried with bounded exponential backoff. Send My buffers key events and
+  emits one UART line per `sendmy.batch_interval_ms` (default 60000), capped by
+  `sendmy.batch_size`; a single event uses v1 and multiple events use a compact
+  v2 batch that preserves each source, boot ID, and sequence. The same timed
+  batching applies to direct implant Send My. Wi-Fi
   egress requires `management.enabled: true`; use `management.mode: "sta"` to
   reach a collector outside the gateway AP, or keep AP mode and place the
   collector on that AP.
   The deployed gateway defaults to LoRa; Wi-Fi egress is selected only by a
   manual operator configuration.
+* `lora_sink` is exclusively a destination of the gateway's `lora` backend;
+  it does not expose or execute an egress configuration.
 
 ## SX1262 uplink protocol and receiver
 

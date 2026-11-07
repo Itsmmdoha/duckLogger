@@ -64,6 +64,8 @@
     "modem_id": "",
     "placement": "companion",
     "max_message_bytes": 180,
-    "max_pending": 64
+    "max_pending": 64,
+    "batch_interval_ms": 60000,
+    "batch_size": 32
   }
 }

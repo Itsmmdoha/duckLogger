@@ -136,6 +136,12 @@ def validate_plan(plan):
             raise PlanError("sendmy.modem_id is required")
         if not 32 <= int(sendmy.get("max_message_bytes", 180)) <= 220:
             raise PlanError("sendmy.max_message_bytes must be between 32 and 220")
+        if not 1000 <= int(sendmy.get("batch_interval_ms", 60000)) <= 86400000:
+            raise PlanError(
+                "sendmy.batch_interval_ms must be between 1000 and 86400000"
+            )
+        if not 1 <= int(sendmy.get("batch_size", 32)) <= 256:
+            raise PlanError("sendmy.batch_size must be between 1 and 256")
     return True
 
 
@@ -210,7 +216,10 @@ def render_settings(plan):
         if role == "lora_sink":
             settings["storage"] = copy.deepcopy(item.get("storage", {}))
         if item.get("uplink", {}).get("sendmy") or "sendmy" in item.get("egress", []):
-            settings["sendmy"] = copy.deepcopy(item.get("sendmy", plan.get("sendmy", {})))
+            settings["sendmy"] = copy.deepcopy(
+                item.get("sendmy", plan.get("sendmy", {}))
+            )
+            settings["sendmy"]["enabled"] = True
         rendered[device_id] = settings
     return rendered
 

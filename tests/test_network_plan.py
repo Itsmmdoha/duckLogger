@@ -37,6 +37,7 @@ def test_plan_renders_all_devices_and_delivery_defaults():
         "mode": "best", "gateways": ["gateway-01"]}
     assert rendered["gateway-01"]["egress"]["backends"] == ["lora"]
     assert rendered["sink-01"]["mesh"]["enabled"] is False
+    assert "egress" not in rendered["sink-01"]
 
 
 def test_plan_rejects_duplicate_ids_and_macs():
@@ -108,3 +109,30 @@ def test_write_rendered_creates_settings_summary_and_manifest(tmp_path):
         Settings(str(output / (device_id + ".json")))
     manifest = (output / "device-manifest.tsv").read_text(encoding="utf-8")
     assert "implant-a\t%s\tnode" % sample_mac("11") in manifest
+
+
+def test_direct_sendmy_rejects_invalid_batch_interval():
+    value = plan()
+    value["implants"][0]["uplink"]["sendmy"] = True
+    value["sendmy"] = {"modem_id": "42424242", "batch_interval_ms": 500}
+    with pytest.raises(PlanError, match="batch_interval_ms"):
+        validate_plan(value)
+
+
+def test_direct_sendmy_rejects_invalid_batch_size():
+    value = plan()
+    value["implants"][0]["uplink"]["sendmy"] = True
+    value["sendmy"] = {"modem_id": "42424242", "batch_size": 0}
+    with pytest.raises(PlanError, match="batch_size"):
+        validate_plan(value)
+
+
+def test_rendered_sendmy_keeps_batch_settings():
+    value = plan()
+    value["implants"][0]["uplink"]["sendmy"] = True
+    value["sendmy"] = {"modem_id": "42424242", "batch_interval_ms": 30000,
+                       "batch_size": 16}
+    rendered = render_settings(value)
+    assert rendered["implant-a"]["sendmy"]["enabled"] is True
+    assert rendered["implant-a"]["sendmy"]["batch_interval_ms"] == 30000
+    assert rendered["implant-a"]["sendmy"]["batch_size"] == 16

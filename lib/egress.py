@@ -198,8 +198,12 @@ class _BackendSettings:
         return getattr(self._settings, name)
 
 
-class EgressManager:
-    """Fan one gateway record out to independent persisted backend queues."""
+class GatewayEgress:
+    """Execute a gateway's configured outbound delivery functions.
+
+    The gateway owns this component. Receivers such as ``lora_sink`` are
+    destinations of a backend and never instantiate gateway egress.
+    """
 
     def __init__(self, settings, lora_link=None, sendmy_uart=None):
         self.enabled = settings.egress_enabled
@@ -220,10 +224,10 @@ class EgressManager:
         for backend in self.backends.values():
             backend.enqueue(record)
 
-    def flush(self):
+    def flush(self, now_ms=None):
         for name, backend in self.backends.items():
             if name == "sendmy":
-                backend.flush_one()
+                backend.flush_due(now_ms)
             else:
                 backend.flush()
 
@@ -238,3 +242,8 @@ class EgressManager:
             "backends": {name: backend.status()
                          for name, backend in self.backends.items()},
         }
+
+
+# Compatibility for integrations written before gateway ownership was made
+# explicit in the class name.
+EgressManager = GatewayEgress

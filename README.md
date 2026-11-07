@@ -5,7 +5,7 @@
 
 DuckLogger MeshOps adds a local, multi-hop ESP-NOW telemetry network to
 DuckLogger. Nodes can originate or relay authorized events. Gateways receive
-and store events, then optionally forward them through a configured egress.
+and store events and execute the configured egress functions.
 
 This repository documents the MeshOps layer. For the original DuckLogger
 hardware and application, see the [upstream DuckLogger project](https://github.com/Itsmmdoha/duckLogger#readme).
@@ -84,8 +84,9 @@ reported MAC and device ID.
 
 ## Egress options
 
-The gateway always stores received events locally. Additional egress backends
-are configured in the gateway plan:
+The gateway always stores received events locally and owns the egress runtime.
+At least one backend is configured in the gateway plan; `log` is the safe
+local-only fallback:
 
 - `wifi`: posts bounded JSON batches to an operator-controlled HTTPS endpoint.
 - `lora`: sends authenticated, fragmented frames over SX1262 to a
@@ -110,7 +111,8 @@ secrets through it.
 The external `lora_sink` role runs on an ESP32-S3 with an SX1262 radio. It
 provides an authenticated local web console with event filters, implant and
 session views, inferred direct or relay paths, RSSI/SNR, and bounded rotating
-NDJSON logs.
+NDJSON logs. It is a destination of the gateway's `lora` backend and never
+executes or configures egress itself.
 
 The canonical hardware is the Seeed 113110064 XIAO ESP32S3 with the Wio-SX1262
 B2B kit. Gateway and receiver must use the same frequency, spreading factor,

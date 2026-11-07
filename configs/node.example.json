@@ -51,6 +51,8 @@
     "baudrate": 115200,
     "max_message_bytes": 180,
     "max_pending": 64,
-    "spool_path": "sendmy-outbox.json"
+    "spool_path": "sendmy-outbox.json",
+    "batch_interval_ms": 60000,
+    "batch_size": 32
   }
 }
