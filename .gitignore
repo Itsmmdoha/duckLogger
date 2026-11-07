@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+index.html.gz
+settings.local.json
+settings.json
+mesh-log.jsonl
+mesh-outbox.json
+mesh-egress.json
+log.txt
+.local-mesh-test/
+backups/
+.DS_Store
+AGENTS.md

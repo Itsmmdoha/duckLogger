@@ -1,4 +1,4 @@
-"""ESP-NOW collection-tree transport for DuckLogger MeshOps."""
+"""Collection-tree routing core for DuckLogger MeshOps."""
 
 import asyncio
 import time
@@ -9,12 +9,10 @@ try:
 except ImportError:
     import json
 
-import espnow
-import network
-
 from mesh_protocol import (
     DuplicateCache,
     ProtocolError,
+    PROTOCOL_VERSION,
     RouteState,
     TYPE_DATA,
     TYPE_ACK,
@@ -25,9 +23,28 @@ from mesh_protocol import (
     encode_packet,
     route_packet,
 )
+from mesh_transport import BROADCAST
 
 
-BROADCAST = b"\xff\xff\xff\xff\xff\xff"
+def _ticks_ms():
+    try:
+        return time.ticks_ms()
+    except AttributeError:
+        return int(time.time() * 1000)
+
+
+def _ticks_diff(now, then):
+    try:
+        return time.ticks_diff(now, then)
+    except AttributeError:
+        return now - then
+
+
+def _ticks_add(now, delta):
+    try:
+        return time.ticks_add(now, delta)
+    except AttributeError:
+        return now + delta
 
 
 class MeshNetwork:
@@ -37,12 +54,16 @@ class MeshNetwork:
     gateway is the root and never needs a route back to every node.
     """
 
-    def __init__(self, settings, on_data=None):
+    def __init__(self, settings, on_data=None, transport=None):
         self.settings = settings
         self.role = settings.role
         self.network_id = settings.mesh_network_id
         self.node_id = settings.node_id
         self.gateway_id = settings.mesh_gateway_id
+        self.delivery_mode = getattr(settings, "delivery_mode", "best")
+        self.delivery_gateways = getattr(
+            settings, "delivery_gateways", [self.gateway_id]
+        )
         self.channel = settings.mesh_channel
         self.max_hops = settings.mesh_max_hops
         self.route_interval_ms = settings.mesh_route_interval_ms
@@ -56,19 +77,25 @@ class MeshNetwork:
         self.peer_key = settings.mesh_peer_key
         self.peer_macs = settings.mesh_peer_macs
         self.on_data = on_data
-
-        self.sta = None
-        self.radio = None
+        if transport is None:
+            from espnow_transport import EspNowTransport
+            transport = EspNowTransport(
+                self.channel, self.peer_key, self.peer_macs.values()
+            )
+        self.transport = transport
         self.route = RouteState(
-            self.gateway_id, self.max_hops, self.route_failover_failures,
-            self.route_timeout_ms,
+            self.delivery_gateways, self.max_hops, self.route_failover_failures,
+            self.route_timeout_ms, self.delivery_mode,
         )
         self.duplicates = DuplicateCache(settings.mesh_duplicate_cache)
         self.pending = []
         self.reverse_paths = {}
         self.reverse_order = []
-        self.peers = []
         self.sequence = 0
+        try:
+            self.boot_id = os.urandom(4).hex()
+        except AttributeError:
+            self.boot_id = "boot-%08x" % (_ticks_ms() & 0xffffffff)
         self.route_sequence = 0
         self.last_route_ms = 0
         self.running = False
@@ -78,6 +105,7 @@ class MeshNetwork:
             "delivered": 0,
             "sent": 0,
             "dropped": 0,
+            "allowlist_dropped": 0,
             "decode_errors": 0,
             "acknowledged": 0,
             "retry_exhausted": 0,
@@ -103,12 +131,14 @@ class MeshNetwork:
                 return
             for packet in packets[-self.max_pending:]:
                 if isinstance(packet, dict) and packet.get("t") == TYPE_DATA:
+                    packet["v"] = PROTOCOL_VERSION
+                    packet.setdefault("b", self.boot_id)
                     self.sequence = max(self.sequence, int(packet.get("q", 0)))
                     self.pending.append({
                         "packet": packet,
                         "attempts": 0,
                         "last_sent_ms": None,
-                        "created_ms": time.ticks_ms(),
+                        "created_ms": _ticks_ms(),
                     })
         except (OSError, ValueError):
             # A damaged outbox must not prevent the node from booting.
@@ -133,8 +163,11 @@ class MeshNetwork:
         except OSError as exc:
             print("MeshOps outbox persistence failed: %s" % exc)
 
-    def _remember_reverse_path(self, source_id, sequence, mac):
-        key = "%s:%s" % (source_id, sequence)
+    def _event_key(self, source_id, boot_id, sequence, gateway_id=""):
+        return "%s:%s:%s:%s" % (source_id, boot_id, sequence, gateway_id)
+
+    def _remember_reverse_path(self, source_id, boot_id, sequence, gateway_id, mac):
+        key = self._event_key(source_id, boot_id, sequence, gateway_id)
         if key not in self.reverse_paths:
             self.reverse_order.append(key)
         self.reverse_paths[key] = mac
@@ -144,29 +177,13 @@ class MeshNetwork:
             self.reverse_paths.pop(expired, None)
 
     def start(self):
-        self.sta = network.WLAN(network.STA_IF)
-        self.sta.active(True)
-        if self.sta.isconnected():
-            self.sta.disconnect()
-        try:
-            self.sta.config(channel=self.channel)
-        except OSError:
-            pass
-
+        mac = self.transport.start()
         if not self.node_id:
-            mac = self.sta.config("mac")
             self.node_id = "node-" + "".join("%02x" % byte for byte in mac[-3:])
 
         if self.role == "gateway":
             self.gateway_id = self.node_id
 
-        mac = self.sta.config("mac")
-
-        self.radio = espnow.ESPNow()
-        self.radio.active(True)
-        if self.peer_key:
-            self.radio.set_pmk(self.peer_key)
-        self._add_peer(BROADCAST, encrypt=False)
         self.running = True
         print("MeshOps %s '%s' mac=%s channel=%s" % (
             self.role, self.node_id,
@@ -175,39 +192,9 @@ class MeshNetwork:
 
     def stop(self):
         self.running = False
-        if self.radio is not None:
-            self.radio.active(False)
+        self.transport.stop()
 
-    def _add_peer(self, mac, encrypt=True):
-        if mac in self.peers:
-            return
-        try:
-            if encrypt and len(self.peer_key) == 16:
-                self.radio.add_peer(mac, lmk=self.peer_key, channel=0,
-                                    ifidx=network.STA_IF, encrypt=True)
-            else:
-                self.radio.add_peer(mac)
-            self.peers.append(mac)
-        except OSError:
-            # ESP-NOW reports an error when a peer already exists. Treat it as
-            # usable and avoid retrying it on every packet.
-            self.peers.append(mac)
-
-    def publish_telemetry(self, event_kind, event_value=0):
-        """Queue one allow-listed synthetic/operational telemetry event."""
-        if self.role != "node":
-            return False
-        try:
-            packet = data_packet(
-                self.network_id,
-                self.node_id,
-                (self.sequence + 1) & 0x7fffffff,
-                self.max_hops,
-                event_kind,
-                event_value,
-            )
-        except ProtocolError:
-            return False
+    def _enqueue_packet(self, packet):
         if len(self.pending) >= self.max_pending:
             self.pending.pop(0)
             self.stats["dropped"] += 1
@@ -216,15 +203,52 @@ class MeshNetwork:
             "packet": packet,
             "attempts": 0,
             "last_sent_ms": None,
-            "created_ms": time.ticks_ms(),
+            "created_ms": _ticks_ms(),
         })
         self._persist_pending()
         return True
 
-    def _send_packet(self, mac, packet):
+    def publish_telemetry(self, event_kind, event_value=0):
+        """Queue one allow-listed synthetic/operational telemetry event."""
+        if self.role != "node":
+            return False
         try:
-            self._add_peer(mac, encrypt=(mac != BROADCAST))
-            self.radio.send(mac, encode_packet(packet), False)
+            sequence = (self.sequence + 1) & 0x7fffffff
+            targets = self.delivery_gateways if self.delivery_mode == "all" else [""]
+            packets = [data_packet(
+                self.network_id, self.node_id, sequence, self.max_hops,
+                event_kind, event_value, self.boot_id, target,
+            ) for target in targets]
+        except ProtocolError:
+            return False
+        for packet in packets:
+            self._enqueue_packet(packet)
+        return True
+
+    def publish_key_event(self, press):
+        """Queue one decoded DuckLogger key event for the gateway."""
+        if self.role != "node":
+            return False
+        try:
+            sequence = (self.sequence + 1) & 0x7fffffff
+            targets = self.delivery_gateways if self.delivery_mode == "all" else [""]
+            packets = [data_packet(
+                self.network_id, self.node_id, sequence, self.max_hops,
+                "key_event", press, self.boot_id, target,
+            ) for target in targets]
+        except ProtocolError:
+            return False
+        for packet in packets:
+            self._enqueue_packet(packet)
+        return True
+
+    def _send_packet(self, mac, packet):
+        if mac != BROADCAST and mac not in self.peer_macs.values():
+            self.stats["allowlist_dropped"] += 1
+            self.stats["dropped"] += 1
+            return False
+        try:
+            self.transport.send(mac, encode_packet(packet))
             self.stats["sent"] += 1
             return True
         except (OSError, ProtocolError):
@@ -263,7 +287,6 @@ class MeshNetwork:
             return
         changed = self.route.consider(self.node_id, mac, packet, now_ms)
         if changed:
-            self._add_peer(self.route.parent_mac)
             print("MeshOps parent=%s hops=%s gateway=%s" % (
                 self.route.parent_id,
                 self.route.hop_count,
@@ -275,36 +298,47 @@ class MeshNetwork:
             self.stats["dropped"] += 1
             return
         source_id = packet.get("s")
+        boot_id = packet.get("b", "legacy")
         sequence = packet.get("q")
-        duplicate = self.duplicates.seen(source_id, sequence)
-        self._remember_reverse_path(source_id, sequence, mac)
+        target_gateway = packet.get("g", "")
+        duplicate = self.duplicates.seen(source_id, sequence, boot_id, target_gateway)
+        self._remember_reverse_path(source_id, boot_id, sequence, target_gateway, mac)
         if not duplicate:
             self.stats["received"] += 1
         if self.role == "gateway":
+            if target_gateway and target_gateway != self.node_id:
+                self.stats["dropped"] += 1
+                return
             if not duplicate:
                 self.stats["delivered"] += 1
                 if self.on_data is not None:
                     self.on_data(packet, mac)
-            self._send_ack(mac, source_id, sequence)
+            self._send_ack(mac, source_id, boot_id, sequence)
             return
 
         ttl = int(packet.get("l", 0))
-        if ttl <= 1 or not self.route.available:
+        selected_route = None
+        if target_gateway:
+            selected_route = self.route.route_for_gateway(target_gateway, _ticks_ms())
+        elif self.route.available:
+            selected_route = (self.route.parent_mac, None)
+        if ttl <= 1 or selected_route is None:
             self.stats["dropped"] += 1
             return
 
         forwarded = dict(packet)
         forwarded["l"] = ttl - 1
         forwarded["h"] = int(forwarded.get("h", 0)) + 1
-        if self._send_packet(self.route.parent_mac, forwarded):
+        parent_mac = selected_route[0]
+        if self._send_packet(parent_mac, forwarded):
             self.stats["forwarded"] += 1
         else:
-            self._record_route_failure(self.route.parent_mac)
+            self._record_route_failure(parent_mac)
 
-    def _send_ack(self, mac, source_id, sequence, ttl=None):
+    def _send_ack(self, mac, source_id, boot_id, sequence, ttl=None):
         packet = ack_packet(
             self.network_id, source_id, sequence,
-            self.max_hops if ttl is None else ttl,
+            self.max_hops if ttl is None else ttl, boot_id, self.node_id,
         )
         return self._send_packet(mac, packet)
 
@@ -313,16 +347,20 @@ class MeshNetwork:
             self.stats["dropped"] += 1
             return
         source_id = packet.get("s")
+        boot_id = packet.get("b", "legacy")
         sequence = packet.get("q")
-        if mac == self.route.parent_mac:
-            self.route.record_send(mac, True, time.ticks_ms())
+        gateway_id = packet.get("g", "")
+        if mac in self.route.candidates:
+            self.route.record_send(mac, True, _ticks_ms())
 
         if self.role == "node" and source_id == self.node_id:
             for index, entry in enumerate(self.pending):
                 data = entry["packet"]
-                if data.get("s") == source_id and data.get("q") == sequence:
-                    elapsed = time.ticks_diff(
-                        time.ticks_ms(), entry["created_ms"]
+                if (data.get("s") == source_id and data.get("b", "legacy") == boot_id
+                        and data.get("q") == sequence
+                        and (not data.get("g") or data.get("g") == gateway_id)):
+                    elapsed = _ticks_diff(
+                        _ticks_ms(), entry["created_ms"]
                     )
                     self.stats["acknowledged"] += 1
                     self.stats["delivery_ack_total_ms"] += max(0, elapsed)
@@ -334,7 +372,13 @@ class MeshNetwork:
 
         if int(packet.get("l", 0)) <= 1:
             return
-        previous_hop = self.reverse_paths.get("%s:%s" % (source_id, sequence))
+        previous_hop = self.reverse_paths.get(
+            self._event_key(source_id, boot_id, sequence, gateway_id)
+        )
+        if previous_hop is None:
+            previous_hop = self.reverse_paths.get(
+                self._event_key(source_id, boot_id, sequence, "")
+            )
         if previous_hop is None:
             return
         forwarded = dict(packet)
@@ -342,7 +386,7 @@ class MeshNetwork:
         self._send_packet(previous_hop, forwarded)
 
     def _record_route_failure(self, mac):
-        if self.route.record_send(mac, False, time.ticks_ms()):
+        if self.route.record_send(mac, False, _ticks_ms()):
             self.stats["route_failovers"] += 1
             print("MeshOps route failover parent=%s hops=%s" % (
                 self.route.parent_id, self.route.hop_count
@@ -351,11 +395,15 @@ class MeshNetwork:
     def _receive_available(self, now_ms):
         for _ in range(8):
             try:
-                mac, raw = self.radio.irecv(0)
+                mac, raw = self.transport.recv()
             except OSError:
                 return
             if mac is None or raw is None:
                 return
+            if mac not in self.peer_macs.values():
+                self.stats["allowlist_dropped"] += 1
+                self.stats["dropped"] += 1
+                continue
             try:
                 packet = decode_packet(raw, self.network_id)
             except ProtocolError:
@@ -379,12 +427,18 @@ class MeshNetwork:
             print("MeshOps route changed after expiry parent=%s" % self.route.parent_id)
 
     def _send_pending(self, now_ms):
-        if self.role != "node" or not self.pending or not self.route.available:
+        if self.role != "node" or not self.pending:
             return
         entry = self.pending[0]
+        target_gateway = entry["packet"].get("g", "")
+        selected_route = (self.route.route_for_gateway(target_gateway, now_ms)
+                          if target_gateway else
+                          ((self.route.parent_mac, None) if self.route.available else None))
+        if selected_route is None:
+            return
         last_sent = entry["last_sent_ms"]
         if last_sent is not None:
-            if time.ticks_diff(now_ms, last_sent) < self.ack_timeout_ms:
+            if _ticks_diff(now_ms, last_sent) < self.ack_timeout_ms:
                 return
             if entry["attempts"]:
                 failed_parent = self.route.parent_mac
@@ -398,7 +452,7 @@ class MeshNetwork:
                 self.stats["retries"] += 1
 
         packet = entry["packet"]
-        parent_mac = self.route.parent_mac
+        parent_mac = selected_route[0]
         if self._send_packet(parent_mac, packet):
             entry["attempts"] += 1
             entry["last_sent_ms"] = now_ms
@@ -407,12 +461,12 @@ class MeshNetwork:
             self._record_route_failure(parent_mac)
 
     def status(self):
+        transport_status = self.transport.status()
         return {
             "role": self.role,
             "node_id": self.node_id,
-            "mac": ":".join(
-                "%02x" % byte for byte in self.sta.config("mac")
-            ) if self.sta is not None else "",
+            "mac": transport_status.get("mac", ""),
+            "transport": transport_status,
             "network_id": self.network_id,
             "gateway_id": self.gateway_id or self.route.gateway_id,
             "parent_id": self.route.parent_id,
@@ -420,6 +474,10 @@ class MeshNetwork:
             "route_available": self.role == "gateway" or self.route.available,
             "pending": len(self.pending),
             "route_candidates": len(self.route.candidates),
+            "delivery_mode": self.delivery_mode,
+            "delivery_gateways": list(self.delivery_gateways),
+            "boot_id": self.boot_id,
+            "allowlist_peers": len(self.peer_macs),
             "route_metrics": {
                 "hop_count": self.route.hop_count,
                 "parent_failures": self.route.candidates.get(
@@ -438,10 +496,10 @@ class MeshNetwork:
         if not self.running:
             self.start()
         while self.running:
-            now_ms = time.ticks_ms()
+            now_ms = _ticks_ms()
             self._receive_available(now_ms)
             self._expire_route(now_ms)
-            if time.ticks_diff(now_ms, self.last_route_ms) >= self.route_interval_ms:
+            if _ticks_diff(now_ms, self.last_route_ms) >= self.route_interval_ms:
                 self._advertise_route(now_ms)
             self._send_pending(now_ms)
             await asyncio.sleep_ms(20)
@@ -452,13 +510,13 @@ class MeshNetwork:
             self.start()
         interval = self.settings.mesh_telemetry_interval_ms
         batch = self.settings.mesh_telemetry_batch
-        next_emit = time.ticks_ms()
+        next_emit = _ticks_ms()
         counter = 0
         while self.running:
-            now_ms = time.ticks_ms()
-            if self.role == "node" and time.ticks_diff(now_ms, next_emit) >= 0:
+            now_ms = _ticks_ms()
+            if self.role == "node" and _ticks_diff(now_ms, next_emit) >= 0:
                 for _ in range(batch):
                     counter += 1
                     self.publish_telemetry("synthetic_counter", counter)
-                next_emit = time.ticks_add(now_ms, interval)
+                next_emit = _ticks_add(now_ms, interval)
             await asyncio.sleep_ms(100)

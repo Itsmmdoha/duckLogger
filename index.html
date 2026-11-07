@@ -298,6 +298,32 @@
             lineNumbers.scrollTop = duckyScript.scrollTop;
         });
 
+        const TOKEN_KEY = 'meshops-api-token';
+
+        function getToken() {
+            let token = sessionStorage.getItem(TOKEN_KEY) || '';
+            if (!token) {
+                token = prompt('API token') || '';
+                if (token) sessionStorage.setItem(TOKEN_KEY, token);
+            }
+            return token;
+        }
+
+        function authHeaders(extra) {
+            return Object.assign(
+                {'Authorization': 'Bearer ' + getToken()},
+                extra || {}
+            );
+        }
+
+        function authFailed(res) {
+            if (res.status === 401) {
+                sessionStorage.removeItem(TOKEN_KEY);
+                showToast('Unauthorized: enter a valid API token', true);
+            }
+            return res;
+        }
+
         // Feedback Toast Logic
         let toastTimeout;
         function showToast(msg, isError = false) {
@@ -313,7 +339,8 @@
         // System API Calls
         function openSys() {
             document.getElementById('sys-overlay').style.display = 'flex';
-            fetch('/settings')
+            fetch('/settings', { headers: authHeaders() })
+                .then(authFailed)
                 .then(res => res.json())
                 .then(data => {
                     document.getElementById('sys-mode').value = data.mode || 'ap';
@@ -335,9 +362,9 @@
 
             fetch('/settings', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: authHeaders({ 'Content-Type': 'application/json' }),
                 body: JSON.stringify(payload)
-            }).then(async res => {
+            }).then(authFailed).then(async res => {
                 const msg = await res.text();
                 btn.classList.add('active');
                 setTimeout(() => btn.classList.remove('active'), 150);
@@ -347,7 +374,7 @@
 
         function deleteLog() {
             if(confirm("Are you sure you want to permanently delete the log file?")) {
-                fetch('/log', { method: 'DELETE' }).then(async res => {
+                fetch('/log', { method: 'DELETE', headers: authHeaders() }).then(authFailed).then(async res => {
                     const msg = await res.text();
                     showToast(msg || (res.ok ? "Logs Deleted!" : "Failed to delete logs"), !res.ok);
                 }).catch(() => showToast("Error deleting logs", true));
@@ -357,7 +384,7 @@
         // Action API Calls
         function injectScript() {
             const data = document.getElementById('ducky-script').value;
-            fetch('/script', { method: 'POST', body: data }).then(async res => {
+            fetch('/script', { method: 'POST', headers: authHeaders(), body: data }).then(authFailed).then(async res => {
                 const msg = await res.text();
                 showToast(msg || (res.ok ? "Script Injected!" : "Injection Failed"), !res.ok);
             }).catch(() => showToast("Error during injection", true));
@@ -382,7 +409,11 @@
             wsDot.style.background = 'var(--red)';
             wsDot.title = 'Connecting...';
             
-            ws = new WebSocket('ws://' + window.location.host + '/kbd');
+            const wsScheme = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+            ws = new WebSocket(
+                wsScheme + window.location.host + '/kbd?token=' +
+                encodeURIComponent(getToken())
+            );
             
             ws.onopen = () => {
                 wsDot.style.background = 'var(--green)';

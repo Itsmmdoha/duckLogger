@@ -8,13 +8,20 @@ except ImportError:
     import json
 
 
+def _ticks_ms():
+    try:
+        return time.ticks_ms()
+    except AttributeError:
+        return int(time.time() * 1000)
+
+
 class MeshStore:
     def __init__(self, path="mesh-log.jsonl"):
         self.path = path
 
     def append(self, packet, sender_mac=None):
         record = {
-            "gateway_received_ms": time.ticks_ms(),
+            "gateway_received_ms": _ticks_ms(),
             "source": packet.get("s"),
             "sequence": packet.get("q"),
             "kind": packet.get("k"),
@@ -26,3 +33,4 @@ class MeshStore:
         with open(self.path, "a") as output:
             output.write(json.dumps(record))
             output.write("\n")
+        return record

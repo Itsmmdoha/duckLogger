@@ -2,6 +2,9 @@
   "device": {
     "role": "node",
     "id": "node-01",
+    "mesh_only": true,
+    "data_source": true,
+    "synthetic_telemetry": false,
     "local_ui": false
   },
   "management": {
@@ -9,7 +12,9 @@
   },
   "mesh": {
     "enabled": true,
+    "transport": "espnow",
     "network_id": "lab-mesh",
+    "protocol_version": 4,
     "gateway_id": "gateway-01",
     "channel": 6,
     "max_hops": 6,
@@ -24,6 +29,28 @@
     "telemetry_batch": 1,
     "max_pending": 128,
     "duplicate_cache": 128,
-    "peer_key": ""
+    "peer_key": "CHANGE_ME_16BYTE",
+    "peer_macs": {
+      "gateway-01": "CHANGE_ME_GATEWAY_MAC"
+    }
+  },
+  "delivery": {
+    "mode": "best",
+    "gateways": ["gateway-01"]
+  },
+  "uplink": {
+    "mesh": true,
+    "sendmy": false
+  },
+  "sendmy": {
+    "enabled": false,
+    "modem_id": "",
+    "uart_id": 1,
+    "tx_pin": 17,
+    "rx_pin": 18,
+    "baudrate": 115200,
+    "max_message_bytes": 180,
+    "max_pending": 64,
+    "spool_path": "sendmy-outbox.json"
   }
 }

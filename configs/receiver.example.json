@@ -1,0 +1,8 @@
+{
+  "device": {"role": "lora_sink", "id": "sink-01", "mesh_only": false, "local_ui": true},
+  "management": {"enabled": true, "mode": "ap", "ssid": "meshops-receiver", "password": "CHANGE_ME_PASSWORD", "api_token": "CHANGE_ME_TOKEN_32_CHARS"},
+  "mesh": {"enabled": false},
+  "lora": {"frequency": 868000000, "spreading_factor": 7, "bandwidth": 125000, "coding_rate": 5, "tx_power": 14, "spi_id": 1, "sck_pin": 7, "mosi_pin": 9, "miso_pin": 8, "cs_pin": 41, "reset_pin": 42, "busy_pin": 40, "dio1_pin": 39, "rf_switch_pin": 38, "key": "CHANGE_ME_LORA_KEY", "ack_timeout_ms": 1500, "max_retries": 3},
+  "storage": {"directory": "logs", "max_bytes": 262144, "max_files": 8, "ring_size": 256},
+  "egress": {"enabled": false, "backend": "none"}
+}

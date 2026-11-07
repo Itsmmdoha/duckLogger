@@ -1,0 +1,6 @@
+{
+  "mode": "ap",
+  "ssid": "duckLogger",
+  "password": "CHANGE_ME_PASSWORD",
+  "api_token": "CHANGE_ME_TOKEN_32_CHARS"
+}

@@ -61,14 +61,13 @@ class Log:
         # Regular typing with shift/caps logic
         result = []
         for key_code in newly_pressed_keys:
-            # Letter Keys
             if key_code in LETTER_KEYS:
                 if mod.shift != self.lock.caps_lock:
                     result.append(decoder.decode(key_code, shift=True))
                 else:
                     result.append(decoder.decode(key_code))
-            # Not Letter Keys
-            result.append(decoder.decode(key_code, mod.shift))
+            else:
+                result.append(decoder.decode(key_code, mod.shift))
         return "".join(result)
 
     def _flush(self):
@@ -88,3 +87,4 @@ class Log:
         press_str = self._get_press(modifiers, keys)
         if press_str:
             self.buffer.append(press_str)
+        return press_str

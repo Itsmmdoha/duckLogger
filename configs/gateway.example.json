@@ -2,17 +2,21 @@
   "device": {
     "role": "gateway",
     "id": "gateway-01",
+    "mesh_only": true,
     "local_ui": true
   },
   "management": {
     "enabled": true,
     "mode": "ap",
     "ssid": "meshops-gateway",
-    "password": "change-this-password"
+    "password": "CHANGE_ME_PASSWORD",
+    "api_token": "CHANGE_ME_TOKEN_32_CHARS"
   },
   "mesh": {
     "enabled": true,
+    "transport": "espnow",
     "network_id": "lab-mesh",
+    "protocol_version": 4,
     "gateway_id": "gateway-01",
     "channel": 6,
     "max_hops": 6,
@@ -27,6 +31,51 @@
     "telemetry_batch": 1,
     "max_pending": 128,
     "duplicate_cache": 128,
-    "peer_key": ""
+    "peer_key": "CHANGE_ME_16BYTE",
+    "peer_macs": {
+      "node-01": "CHANGE_ME_NODE_MAC"
+    }
+  },
+  "egress": {
+    "enabled": true,
+    "backend": "lora",
+    "backends": ["lora"],
+    "url": "",
+    "batch_size": 10,
+    "interval_ms": 5000,
+    "max_pending": 512,
+    "spool_path": "mesh-egress.json",
+    "retry_base_ms": 1000,
+    "retry_max_ms": 60000
+  },
+  "lora": {
+    "frequency": 868000000,
+    "spreading_factor": 7,
+    "bandwidth": 125000,
+    "coding_rate": 5,
+    "tx_power": 14,
+    "spi_id": 1,
+    "sck_pin": 7,
+    "mosi_pin": 9,
+    "miso_pin": 8,
+    "cs_pin": 41,
+    "reset_pin": 42,
+    "busy_pin": 40,
+    "dio1_pin": 39,
+    "rf_switch_pin": 38,
+    "key": "CHANGE_ME_LORA_KEY",
+    "ack_timeout_ms": 1500,
+    "max_retries": 3
+  },
+  "sendmy": {
+    "enabled": false,
+    "modem_id": "",
+    "uart_id": 1,
+    "tx_pin": 17,
+    "rx_pin": 18,
+    "baudrate": 115200,
+    "max_message_bytes": 180,
+    "max_pending": 64,
+    "spool_path": "sendmy-outbox.json"
   }
 }
